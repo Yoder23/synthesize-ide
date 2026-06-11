@@ -132,9 +132,17 @@ function loadRuntimeSettings(): RuntimeSettings {
   try {
     const raw = localStorage.getItem('synthesize.runtimeSettings.v2') ?? localStorage.getItem('synthesize.runtimeSettings.v1');
     if (!raw) return defaultRuntimeSettings;
-    const parsed = { ...defaultRuntimeSettings, ...JSON.parse(raw) } as RuntimeSettings & { provider: string };
-    if (parsed.provider === 'openai-compatible') parsed.provider = 'local-server';
-    return parsed as RuntimeSettings;
+    const parsed = { ...defaultRuntimeSettings, ...JSON.parse(raw) } as Record<string, unknown>;
+    const providerRaw = parsed.provider === 'openai-compatible' ? 'local-server' : parsed.provider;
+    const provider: RuntimeSettings['provider'] = (
+      providerRaw === 'fake' || providerRaw === 'local-server' || providerRaw === 'managed-llamacpp'
+    ) ? providerRaw : 'local-server';
+    return {
+      provider,
+      endpointUrl: typeof parsed.endpointUrl === 'string' ? parsed.endpointUrl : defaultRuntimeSettings.endpointUrl,
+      modelName: typeof parsed.modelName === 'string' ? parsed.modelName : defaultRuntimeSettings.modelName,
+      remoteConfirmed: Boolean(parsed.remoteConfirmed)
+    };
   } catch {
     return defaultRuntimeSettings;
   }
