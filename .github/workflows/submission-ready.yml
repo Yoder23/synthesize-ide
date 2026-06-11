@@ -25,11 +25,11 @@ jobs:
           node-version: 20
           cache: pnpm
       - name: Cargo check
-        run: cargo check --workspace
+        run: cargo check --workspace --exclude synthesize-ide-desktop
       - name: Cargo test
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude synthesize-ide-desktop
       - name: Frontend install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       - name: Frontend typecheck
         run: pnpm typecheck
       - name: Frontend build

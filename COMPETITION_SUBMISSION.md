@@ -61,9 +61,9 @@ See `docs/submission-architecture.md` and `docs/moa-bridge.md`.
 
 This runs:
 
-- `cargo check --workspace`
-- `cargo test --workspace`
-- `pnpm install --frozen-lockfile`
+- `cargo check --workspace --exclude synthesize-ide-desktop`
+- `cargo test --workspace --exclude synthesize-ide-desktop`
+- `pnpm install --no-frozen-lockfile`
 - `pnpm typecheck`
 - `pnpm build`
 - `pnpm test`
