@@ -1,0 +1,19 @@
+{
+  "id": "llamacpp",
+  "label": "llama.cpp server",
+  "kind": "llamacpp",
+  "binaryNames": {
+    "darwin": "llama-server",
+    "linux": "llama-server",
+    "windows": "llama-server.exe"
+  },
+  "defaultArgs": [
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "0"
+  ],
+  "healthEndpoint": "/health",
+  "chatEndpoint": "/v1/chat/completions",
+  "embeddingsEndpoint": "/v1/embeddings"
+}

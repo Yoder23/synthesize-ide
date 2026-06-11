@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#111827"/>
+  <style>
+    .box{fill:#1f2937;stroke:#9ca3af;stroke-width:2;rx:14;ry:14}.trust{fill:#064e3b;stroke:#34d399;stroke-width:3;rx:14;ry:14}.text{fill:#f9fafb;font:24px sans-serif}.small{fill:#d1d5db;font:18px sans-serif}.arrow{stroke:#e5e7eb;stroke-width:3;marker-end:url(#arrow)}
+  </style>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#e5e7eb"/></marker></defs>
+  <text x="40" y="56" class="text">Synthesize IDE — local AI planning, governed MoA/Synthesize action</text>
+  <rect x="50" y="110" width="210" height="90" class="box"/><text x="78" y="162" class="text">Developer</text>
+  <rect x="330" y="110" width="250" height="90" class="box"/><text x="365" y="148" class="text">Synthesize IDE</text><text x="365" y="178" class="small">chat · diff · audit UI</text>
+  <rect x="650" y="90" width="270" height="130" class="box"/><text x="682" y="130" class="text">Local model</text><text x="682" y="162" class="small">planner / coder</text><text x="682" y="190" class="small">fake · llama.cpp · Ollama</text>
+  <rect x="990" y="110" width="230" height="90" class="box"/><text x="1030" y="148" class="text">Typed ops</text><text x="1030" y="178" class="small">JSON only</text>
+  <rect x="330" y="310" width="890" height="270" class="trust"/><text x="365" y="352" class="text">Trusted MoA / Synthesize governance boundary</text>
+  <rect x="370" y="390" width="170" height="90" class="box"/><text x="400" y="425" class="small">Validate</text><text x="400" y="452" class="small">path · hash · policy</text>
+  <rect x="585" y="390" width="170" height="90" class="box"/><text x="622" y="425" class="small">Approve</text><text x="622" y="452" class="small">human gate</text>
+  <rect x="800" y="390" width="170" height="90" class="box"/><text x="842" y="425" class="small">Apply</text><text x="842" y="452" class="small">checkpointed</text>
+  <rect x="1015" y="390" width="170" height="90" class="box"/><text x="1050" y="425" class="small">Rollback</text><text x="1050" y="452" class="small">reversible</text>
+  <rect x="50" y="390" width="210" height="90" class="box"/><text x="90" y="425" class="small">Audit log</text><text x="90" y="452" class="small">context · ops · actions</text>
+  <line x1="260" y1="155" x2="330" y2="155" class="arrow"/>
+  <line x1="580" y1="155" x2="650" y2="155" class="arrow"/>
+  <line x1="920" y1="155" x2="990" y2="155" class="arrow"/>
+  <line x1="1105" y1="200" x2="1105" y2="310" class="arrow"/>
+  <line x1="990" y1="435" x2="1015" y2="435" class="arrow"/>
+  <line x1="755" y1="435" x2="800" y2="435" class="arrow"/>
+  <line x1="540" y1="435" x2="585" y2="435" class="arrow"/>
+  <line x1="330" y1="435" x2="260" y2="435" class="arrow"/>
+  <text x="375" y="625" class="small">Invariant: the model proposes; the trusted backend validates, approves, applies, rolls back, and audits.</text>
+</svg>

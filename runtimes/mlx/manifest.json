@@ -1,0 +1,7 @@
+{
+  "id": "mlx",
+  "label": "MLX Apple Silicon runtime",
+  "kind": "mlx",
+  "mode": "managed-python",
+  "notes": "Apple Silicon lane."
+}

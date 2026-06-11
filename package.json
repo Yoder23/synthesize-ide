@@ -1,0 +1,21 @@
+{
+  "name": "synthesize-ide",
+  "version": "0.1.3",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "desktop:dev": "pnpm --filter synthesize-ide-desktop dev",
+    "desktop:tauri": "pnpm --filter synthesize-ide-desktop tauri dev",
+    "moa:bridge": "python integrations/moa/synthesize_bridge.py",
+    "moa:verify": "python integrations/moa/verify_moa.py",
+    "submission:check": "powershell -ExecutionPolicy Bypass -File scripts/submission-check.ps1",
+    "submission:bundle": "powershell -ExecutionPolicy Bypass -File scripts/submission-bundle.ps1",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

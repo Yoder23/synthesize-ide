@@ -1,0 +1,8 @@
+{
+  "proposalId": "valid-but-unapproved",
+  "applyInput": {
+    "proposal_id": "valid-but-unapproved",
+    "approval_id": "missing"
+  },
+  "expected": "rejected: proposal must be approved and approval_id must match"
+}

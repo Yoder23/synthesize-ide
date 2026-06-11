@@ -1,0 +1,7 @@
+{
+  "name": "governed-patch-loop-fixture",
+  "currentFile": "src/auth/refresh.ts",
+  "beforeSha256": "80e87391456124395a779b224f6bbca3c2ff1a0dede0f9d579bee95ed1199989",
+  "expectedAfterContains": "return \"refreshed\";",
+  "purpose": "Fixture for fake-runtime propose_patch -> backend validate -> checkpoint -> apply -> audit."
+}

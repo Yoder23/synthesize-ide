@@ -1,0 +1,7 @@
+{
+  "proposalId": "valid-proposal",
+  "approvalInput": {
+    "operation_sha256": "not-the-persisted-operation-hash"
+  },
+  "expected": "rejected: operation_sha256 does not match persisted proposal snapshot"
+}

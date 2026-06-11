@@ -1,0 +1,4 @@
+{
+  "path": "../outside.ts",
+  "reason": "RepoGuard must reject parent traversal before patch application."
+}

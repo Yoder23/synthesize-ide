@@ -1,0 +1,62 @@
+{
+  "version": "0.4.0",
+  "models": [
+    {
+      "registryId": "qwen2.5-coder-7b-instruct-q4-k-m",
+      "name": "Qwen2.5 Coder 7B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 32768,
+      "supportsJsonMode": true,
+      "supportsToolCalling": false,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 12,
+      "recommendedVramGb": 8,
+      "download": {
+        "status": "user-supplied-url-required",
+        "reason": "v4 has registration scaffolding. v5/v6 should add checksum-verified downloader after model URL and license selection."
+      },
+      "notes": "Recommended first real local coding model lane for laptops."
+    },
+    {
+      "registryId": "qwen2.5-coder-14b-instruct-q4-k-m",
+      "name": "Qwen2.5 Coder 14B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 32768,
+      "supportsJsonMode": true,
+      "supportsToolCalling": false,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 20,
+      "recommendedVramGb": 12,
+      "download": {
+        "status": "user-supplied-url-required",
+        "reason": "Do not ship unverified third-party model URLs/checksums in this architecture repo."
+      },
+      "notes": "Stronger local patch/planning model lane."
+    },
+    {
+      "registryId": "deepseek-coder-6.7b-instruct-q4-k-m",
+      "name": "DeepSeek Coder 6.7B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "deepseek",
+      "contextWindow": 16384,
+      "supportsJsonMode": true,
+      "supportsToolCalling": false,
+      "supportsEmbeddings": false,
+      "license": "model-specific",
+      "recommendedRamGb": 10,
+      "recommendedVramGb": 6,
+      "download": {
+        "status": "user-supplied-url-required",
+        "reason": "Verify model license and checksum before enabling one-click download."
+      },
+      "notes": "Compact local coding baseline."
+    }
+  ]
+}

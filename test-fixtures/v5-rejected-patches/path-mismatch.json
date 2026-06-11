@@ -1,0 +1,6 @@
+{
+  "proposalId": "reject-path-mismatch",
+  "path": "src/auth/refresh.ts",
+  "diffHeaderPath": "package.json",
+  "expected": "rejected: diff header path mismatch"
+}

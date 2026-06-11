@@ -1,0 +1,7 @@
+{
+  "id": "vllm",
+  "label": "vLLM advanced runtime",
+  "kind": "vllm",
+  "mode": "external-or-managed-python",
+  "notes": "Advanced GPU workstation/server mode."
+}

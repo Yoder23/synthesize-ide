@@ -1,0 +1,3 @@
+diff --git a/src/auth/refresh.ts b/src/auth/refresh.ts
+--- a/src/auth/refresh.ts
++++ b/src/auth/refresh.ts

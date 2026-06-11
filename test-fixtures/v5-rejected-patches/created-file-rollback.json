@@ -1,0 +1,7 @@
+{
+  "proposalId": "create-file-then-rollback",
+  "checkpointManifestExpectation": {
+    "existed_before": false,
+    "rollback_action": "delete created file"
+  }
+}

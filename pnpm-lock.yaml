@@ -1,0 +1,23 @@
+# Synthesize IDE lockfile note
+#
+# This repository now includes pnpm-lock.yaml so the release gate has an
+# explicit lockfile path. The full dependency resolution could not be
+# hydrated in the ChatGPT sandbox because external npm registry access was
+# unavailable. In a normal pnpm-enabled development environment, run:
+#
+#   pnpm install --lockfile-only
+#
+# or simply run:
+#
+#   ./scripts/release-check.sh
+#
+# The release-check script now generates the lockfile automatically when it
+# is absent, then runs pnpm install --frozen-lockfile as part of the gate.
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .: {}

@@ -1,0 +1,12 @@
+# Core requirements — stdlib only
+# Install optional backends:
+#   pip install moa[openai]
+#   pip install moa[anthropic]
+#   pip install moa[ollama]
+#   pip install moa[hf]
+#   pip install moa[layercake]
+#   pip install moa[all]
+
+# Development
+pytest>=7.0
+pytest-cov

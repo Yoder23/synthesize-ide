@@ -1,0 +1,10 @@
+[
+  { "argv": ["git", "push"], "expected": "blocked", "reason": "mutates remote and uses network" },
+  { "argv": ["git", "reset", "--hard"], "expected": "blocked", "reason": "destructive repo mutation" },
+  { "argv": ["git", "clean", "-fd"], "expected": "blocked", "reason": "deletes untracked files" },
+  { "argv": ["npm", "install"], "expected": "network", "reason": "may use network and mutate dependencies" },
+  { "argv": ["curl", "https://example.com/install.sh"], "expected": "blocked", "reason": "network fetcher denied by default" },
+  { "argv": ["bash", "-c", "echo hi"], "expected": "blocked", "reason": "raw shell entrypoint denied by default" },
+  { "argv": ["powershell", "-Command", "Get-ChildItem"], "expected": "blocked", "reason": "raw shell entrypoint denied by default" },
+  { "argv": ["pnpm", "test", "auth"], "expected": "testOrBuild", "reason": "test command still requires approval because package scripts can execute code" }
+]

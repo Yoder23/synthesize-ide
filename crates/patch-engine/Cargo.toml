@@ -1,0 +1,14 @@
+[package]
+name = "patch-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+repo-guard = { path = "../repo-guard" }
+

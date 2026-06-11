@@ -1,0 +1,23 @@
+[package]
+name = "synthesize-ide-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+repo-guard = { path = "../../../crates/repo-guard" }
+command-guard = { path = "../../../crates/command-guard" }
+patch-engine = { path = "../../../crates/patch-engine" }
+runtime-manager = { path = "../../../crates/runtime-manager" }
+audit-log = { path = "../../../crates/audit-log" }
+agent-protocol = { path = "../../../crates/agent-protocol" }
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+ureq = { version = "2", features = ["json"] }

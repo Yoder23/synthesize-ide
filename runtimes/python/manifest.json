@@ -1,0 +1,7 @@
+{
+  "id": "transformers-python",
+  "label": "Transformers/Python + MoA runtime",
+  "kind": "transformers",
+  "mode": "managed-python",
+  "notes": "Compatibility, experimentation, and bundled MoA bridge lane."
+}
