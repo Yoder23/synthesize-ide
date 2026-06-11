@@ -43,11 +43,11 @@ if ($SkipFrontend) {
   Write-Host '[submission-check] pnpm install --no-frozen-lockfile'
   pnpm install --no-frozen-lockfile
 
-  Write-Host '[submission-check] pnpm typecheck'
-  pnpm typecheck
-
   Write-Host '[submission-check] pnpm build'
   pnpm build
+
+  Write-Host '[submission-check] pnpm typecheck'
+  pnpm typecheck
 
   Write-Host '[submission-check] pnpm test'
   pnpm test
