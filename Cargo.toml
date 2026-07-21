@@ -13,6 +13,7 @@ members = [
   "crates/pulse-engine",
   "crates/worktree-manager",
   "crates/context-os",
+  "crates/dream-factory",
   "apps/desktop/src-tauri"
 ]
 

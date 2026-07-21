@@ -29,6 +29,12 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
         "context_operating_system",
         include_str!("../migrations/004_context_operating_system.sql"),
     )?;
+    apply_migration(
+        conn,
+        5,
+        "dream_factory_controller",
+        include_str!("../migrations/005_dream_factory_controller.sql"),
+    )?;
     Ok(())
 }
 
@@ -112,14 +118,15 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         init_schema(&conn).unwrap();
         init_schema(&conn).unwrap();
-        assert_eq!(current_schema_version(&conn).unwrap(), 4);
+        assert_eq!(current_schema_version(&conn).unwrap(), 5);
         assert_eq!(
             applied_migrations(&conn).unwrap(),
             vec![
                 (1, "base_audit_schema".to_string()),
                 (2, "outcome_governed_studio".to_string()),
                 (3, "studio_hardening".to_string()),
-                (4, "context_operating_system".to_string())
+                (4, "context_operating_system".to_string()),
+                (5, "dream_factory_controller".to_string())
             ]
         );
     }
@@ -200,6 +207,6 @@ mod tests {
             )
             .unwrap();
         assert_eq!(title, "Persistent");
-        assert_eq!(current_schema_version(&reopened).unwrap(), 4);
+        assert_eq!(current_schema_version(&reopened).unwrap(), 5);
     }
 }

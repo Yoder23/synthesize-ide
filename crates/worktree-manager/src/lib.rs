@@ -109,9 +109,11 @@ impl<'a> WorktreeManager<'a> {
         approved_base_commit: &str,
         approved_by_source: &str,
     ) -> Result<GovernedWorktree> {
-        if approved_by_source != "local-user" {
+        if approved_by_source != "local-user"
+            && approved_by_source != "mandate-bound-worktree-policy"
+        {
             return Err(WorktreeError::Approval(
-                "worktree creation requires local-user approval".into(),
+                "worktree creation requires local-user or mandate-bound policy approval".into(),
             ));
         }
         let state = self.inspect()?;

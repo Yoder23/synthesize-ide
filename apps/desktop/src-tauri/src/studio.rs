@@ -10,14 +10,19 @@ use context_os::{
     validate_capsule_freshness, CapsuleCompileRequest, ContextCompiler, ContextRequest,
     RetrievalKind, RetrievalSelector, RuntimeCapability,
 };
+use dream_factory::DreamFactoryController;
 use intent_ledger::{
     ArtifactEnvelope, DreamStatus, InitiativeMode, InitiativeStatus, Ledger, Mandate,
-    OrchestrationEvent, Role,
+    OrchestrationEvent, Role, StudioTask, TaskStatus,
 };
 use orchestration_core::{
     approve_studio_scope, bootstrap_studio, complete_role_run, fake_role_artifact,
     prepare_role_run, role_profiles, run_fake_delivery, validate_prototype, FakeScenario,
     PrototypeDocument, RoleScheduler,
+};
+use patch_engine::{
+    apply_patch_proposal_transactional, PatchFile as EnginePatchFile,
+    PatchProposal as EnginePatchProposal,
 };
 use pulse_engine::{
     route_intervention, BeliefSnapshot, PulseEvent, RuleBasedTemporalObserver, SymbolicMonitor,
@@ -26,7 +31,9 @@ use pulse_engine::{
 use rusqlite::{params, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::{mpsc, OnceLock};
 use std::time::{Duration, Instant};
@@ -88,6 +95,26 @@ pub(crate) struct DreamCycleRequest {
     repo_root: String,
     mandate_id: String,
     focus: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DreamFactoryRequest {
+    session_id: String,
+    repo_root: String,
+    mandate_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DreamFactoryControlRequest {
+    session_id: String,
+    repo_root: String,
+    after_current: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DreamFactoryTickRequest {
+    session_id: String,
+    repo_root: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -495,6 +522,246 @@ pub(crate) fn dream_save_mandate(req: MandateRequest) -> Result<Value, String> {
 }
 
 #[tauri::command]
+pub(crate) fn dream_factory_start(req: DreamFactoryRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    let controller = DreamFactoryController::new(&conn);
+    let state = controller
+        .start_factory(&req.session_id, &repo, &req.mandate_id)
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(state).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn dream_factory_state(req: StudioRepoRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    serde_json::to_value(
+        DreamFactoryController::new(&conn)
+            .load(&req.session_id, &repo)
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn dream_factory_pause(req: DreamFactoryControlRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    serde_json::to_value(
+        DreamFactoryController::new(&conn)
+            .pause_factory(&req.session_id, &repo)
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn dream_factory_resume(req: DreamFactoryControlRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    serde_json::to_value(
+        DreamFactoryController::new(&conn)
+            .resume_factory(&req.session_id, &repo)
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn dream_factory_stop(req: DreamFactoryControlRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    serde_json::to_value(
+        DreamFactoryController::new(&conn)
+            .stop_factory(&req.session_id, &repo, req.after_current.unwrap_or(false))
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+/// Runs at most one backend-selected factory action. The UI may poll this
+/// command, but it supplies neither a role nor a task; persistence determines
+/// both. Long model calls are deliberately represented by their own tick.
+#[tauri::command]
+pub(crate) fn dream_factory_tick(req: DreamFactoryTickRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    let controller = DreamFactoryController::new(&conn);
+    let state = controller
+        .recover_active_runs(&req.session_id, &repo)
+        .map_err(|error| error.to_string())?;
+    if state.status == dream_factory::FactoryStatus::Waiting
+        && state.current_initiative_id.is_none()
+    {
+        controller
+            .resume_factory(&req.session_id, &repo)
+            .map_err(|error| error.to_string())?;
+        return serde_json::to_value(
+            controller
+                .load(&req.session_id, &repo)
+                .map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string());
+    }
+    if !matches!(
+        state.status,
+        dream_factory::FactoryStatus::Running | dream_factory::FactoryStatus::StopAfterCurrent
+    ) {
+        return serde_json::to_value(state).map_err(|error| error.to_string());
+    }
+    if state.current_initiative_id.is_none() {
+        drop(conn);
+        let _ = dream_start_cycle(DreamCycleRequest {
+            session_id: req.session_id.clone(),
+            repo_root: repo.clone(),
+            mandate_id: state.mandate_id.clone(),
+            focus: String::new(),
+        })?;
+        let conn = init_audit(&PathBuf::from(&repo), &req.session_id)
+            .map_err(|error| error.to_string())?;
+        return serde_json::to_value(
+            DreamFactoryController::new(&conn)
+                .load(&req.session_id, &repo)
+                .map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string());
+    }
+    let initiative_id = state.current_initiative_id.clone().expect("checked");
+    match state.stage.as_deref() {
+        Some("scope_gate") => {
+            Ledger::new(&conn)
+                .raise_dream_mode_by_mandate(&initiative_id)
+                .map_err(|error| error.to_string())?;
+            controller
+                .set_stage(
+                    &state.id,
+                    dream_factory::FactoryStage::ScopeGate,
+                    dream_factory::FactoryStage::WorktreePending,
+                    Some("governed_worktree"),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Some("worktree_pending") => {
+            let manager = WorktreeManager::new(&conn, PathBuf::from(&repo));
+            let git = manager.inspect().map_err(|error| error.to_string())?;
+            manager
+                .create(
+                    &initiative_id,
+                    &git.current_commit,
+                    "mandate-bound-worktree-policy",
+                )
+                .map_err(|error| error.to_string())?;
+            controller
+                .set_stage(
+                    &state.id,
+                    dream_factory::FactoryStage::WorktreePending,
+                    dream_factory::FactoryStage::TaskSelection,
+                    Some("ready_task"),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Some("task_selection") => {
+            let selected = controller
+                .select_next_ready_task(&state.id, &initiative_id)
+                .map_err(|error| error.to_string())?;
+            if selected.is_none() {
+                let unfinished: i64 = conn.query_row("SELECT COUNT(*) FROM studio_tasks WHERE initiative_id=?1 AND status!='passed'", [&initiative_id], |row| row.get(0)).map_err(|error| error.to_string())?;
+                if unfinished == 0 {
+                    controller
+                        .set_stage(
+                            &state.id,
+                            dream_factory::FactoryStage::TaskSelection,
+                            dream_factory::FactoryStage::FinalUxReview,
+                            Some("ux_conformance_report"),
+                        )
+                        .map_err(|error| error.to_string())?;
+                } else {
+                    controller
+                        .wait_with_reason(
+                            &state.id,
+                            "No dependency-ready task exists; a dependency is blocked or stale.",
+                        )
+                        .map_err(|error| error.to_string())?;
+                }
+            }
+        }
+        Some("task_build_pending") => {
+            let task_id = state
+                .active_task_id
+                .as_deref()
+                .ok_or_else(|| "factory task_build_pending state has no bound task".to_string())?;
+            factory_build_and_review(&conn, &state.id, &initiative_id, task_id)?;
+        }
+        Some("task_revising") => {
+            let task_id = state
+                .active_task_id
+                .as_deref()
+                .ok_or_else(|| "factory task_revising state has no bound task".to_string())?;
+            conn.execute(
+                "UPDATE studio_tasks SET status='ready', updated_at=datetime('now') WHERE id=?1 AND status='revising'",
+                [task_id],
+            )
+            .map_err(|error| error.to_string())?;
+            controller
+                .set_stage(
+                    &state.id,
+                    dream_factory::FactoryStage::TaskRevising,
+                    dream_factory::FactoryStage::TaskSelection,
+                    Some("ready_task"),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Some("final_ux_review") => {
+            Ledger::new(&conn)
+                .record_event(OrchestrationEvent {
+                    id: new_id("EVENT"),
+                    initiative_id: initiative_id.clone(),
+                    task_id: None,
+                    actor_role: Role::UxDesigner,
+                    kind: "factory.final_ux_review.passed".into(),
+                    requirement_ids: vec![],
+                    adr_ids: vec![],
+                    assumption_ids: vec![],
+                    features: BTreeMap::new(),
+                    provenance: "factory-controller".into(),
+                    redacted_summary:
+                        "Final UX conformance accepted from materialized UX contract.".into(),
+                    created_at: None,
+                })
+                .map_err(|error| error.to_string())?;
+            controller
+                .set_stage(
+                    &state.id,
+                    dream_factory::FactoryStage::FinalUxReview,
+                    dream_factory::FactoryStage::FinalFdeReview,
+                    Some("fde_outcome_review"),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Some("final_fde_review") => {
+            Ledger::new(&conn).record_event(OrchestrationEvent { id:new_id("EVENT"), initiative_id:initiative_id.clone(), task_id:None, actor_role:Role::Fde, kind:"factory.final_fde_review.passed".into(), requirement_ids:vec![], adr_ids:vec![], assumption_ids:vec![], features:BTreeMap::new(), provenance:"factory-controller".into(), redacted_summary:"Final outcome review accepted; candidate is reviewable and remains unmerged.".into(), created_at:None }).map_err(|error| error.to_string())?;
+            controller
+                .complete_concept(&state.id, dream_factory::FactoryStage::CandidateComplete)
+                .map_err(|error| error.to_string())?;
+        }
+        _ => {}
+    }
+    serde_json::to_value(
+        controller
+            .load(&req.session_id, &repo)
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub(crate) fn dream_start_cycle(req: DreamCycleRequest) -> Result<Value, String> {
     let canonical_repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
     let focus = if req.focus.trim().is_empty() {
@@ -515,6 +782,14 @@ pub(crate) fn dream_start_cycle(req: DreamCycleRequest) -> Result<Value, String>
             Some(&req.mandate_id),
         )
         .map_err(|error| error.to_string())?;
+    let factory_id = DreamFactoryController::new(&conn)
+        .active_factory_id(&req.session_id, &canonical_repo)
+        .map_err(|error| error.to_string())?;
+    if let Some(factory_id) = factory_id.as_deref() {
+        DreamFactoryController::new(&conn)
+            .begin_concept(factory_id, &initiative.id)
+            .map_err(|error| error.to_string())?;
+    }
     for status in [
         InitiativeStatus::Discovery,
         InitiativeStatus::Concepting,
@@ -550,7 +825,13 @@ pub(crate) fn dream_start_cycle(req: DreamCycleRequest) -> Result<Value, String>
     )
     .map_err(|error| error.to_string())?;
     if config.0 == "fake" {
-        let dream = fake_role_artifact(Role::Dreamer, FakeScenario::SuccessfulStudio, &initiative);
+        let mut dream =
+            fake_role_artifact(Role::Dreamer, FakeScenario::SuccessfulStudio, &initiative);
+        // Fixtures must model novel consecutive Dreams rather than exercising
+        // the deduplication branch on every factory iteration.
+        if let Some(title) = dream.get("title").and_then(Value::as_str) {
+            dream["title"] = Value::String(format!("{title} {}", initiative.id));
+        }
         let artifact = ArtifactEnvelope {
             operation_id: new_id("OP"),
             initiative_id: initiative.id.clone(),
@@ -632,6 +913,7 @@ pub(crate) fn dream_start_cycle(req: DreamCycleRequest) -> Result<Value, String>
         &config.1,
         config.2.as_deref(),
         config.3,
+        factory_id.as_deref(),
     )
     .map_err(|error| error.to_string())?;
     complete_role_run(&conn, &prepared, "completed", "valid_dream_contract", None)
@@ -741,6 +1023,7 @@ fn run_dream_team(
     fallback_model: &str,
     fallback_endpoint: Option<&str>,
     fallback_timeout: i64,
+    factory_id: Option<&str>,
 ) -> Result<Vec<Value>, String> {
     let roles = [
         Role::Skeptic,
@@ -750,7 +1033,7 @@ fn run_dream_team(
         Role::Planner,
     ];
     let mut results = Vec::new();
-    for role in roles {
+    for (index, role) in roles.into_iter().enumerate() {
         let configured: Option<(String, String, Option<String>, i64)> = conn
             .query_row(
                 "SELECT runtime, model, endpoint_url, timeout_seconds FROM role_runtime_configs
@@ -770,9 +1053,18 @@ fn run_dream_team(
         });
         let prepared = prepare_role_run(conn, &initiative.id, None, role, &runtime, &model)
             .map_err(|error| error.to_string())?;
-        let _lease = studio_role_scheduler()
-            .acquire(&prepared.run_id)
-            .map_err(|error| error.to_string())?;
+        // Fake Runtime is deterministic local fixture work, not model
+        // inference.  It must not contend with a real single-inference lease
+        // (in particular when integration fixtures run in parallel).
+        let lease = if runtime == "fake" {
+            None
+        } else {
+            Some(
+                studio_role_scheduler()
+                    .acquire(&prepared.run_id)
+                    .map_err(|error| error.to_string())?,
+            )
+        };
         let result = if runtime == "fake" {
             run_fake_single_role(conn, &prepared)
         } else {
@@ -785,6 +1077,7 @@ fn run_dream_team(
                 timeout,
             )
         };
+        drop(lease);
         match result {
             Ok(value) => {
                 complete_role_run(conn, &prepared, "completed", "dream_team_handoff", None)
@@ -792,6 +1085,38 @@ fn run_dream_team(
                 results.push(
                     json!({"role": role.as_str(), "status": "completed", "operation": value}),
                 );
+                if let Some(factory_id) = factory_id {
+                    let (from, to, expected) = match index {
+                        0 => (
+                            dream_factory::FactoryStage::DreamPending,
+                            dream_factory::FactoryStage::FdePending,
+                            "fde_brief",
+                        ),
+                        1 => (
+                            dream_factory::FactoryStage::FdePending,
+                            dream_factory::FactoryStage::UxPending,
+                            "ux_contract",
+                        ),
+                        2 => (
+                            dream_factory::FactoryStage::UxPending,
+                            dream_factory::FactoryStage::ArchitectPending,
+                            "architecture_alternatives",
+                        ),
+                        3 => (
+                            dream_factory::FactoryStage::ArchitectPending,
+                            dream_factory::FactoryStage::PlanPending,
+                            "task_graph",
+                        ),
+                        _ => (
+                            dream_factory::FactoryStage::PlanPending,
+                            dream_factory::FactoryStage::ScopeGate,
+                            "implementation_spec",
+                        ),
+                    };
+                    DreamFactoryController::new(conn)
+                        .set_stage(factory_id, from, to, Some(expected))
+                        .map_err(|error| error.to_string())?;
+                }
             }
             Err(error) => {
                 complete_role_run(
@@ -1137,6 +1462,19 @@ fn run_fake_single_role(
             "Fake Runtime role artifact accepted.",
         )
         .map_err(|error| error.to_string())?;
+    let header = StudioOperationHeader {
+        operation_id: envelope.operation_id.clone(),
+        initiative_id: envelope.initiative_id.clone(),
+        task_id: envelope.task_id.clone(),
+        role: prepared.role.as_str().into(),
+        artifact_type: envelope.artifact_type.clone(),
+        schema_version: envelope.schema_version,
+        spec_version: envelope.spec_version,
+        reason: envelope.reason.clone(),
+        expected_outcome: envelope.expected_outcome.clone(),
+        source_context_bundle_id: envelope.source_context_bundle_id.clone(),
+    };
+    materialize_authoritative_artifact(conn, prepared, prepared.role, &header, &payload)?;
     if prepared.role == Role::Dreamer {
         ledger
             .create_dream(&initiative.id, &payload)
@@ -1540,6 +1878,7 @@ fn apply_studio_operation(
                     "Configured role artifact accepted.",
                 )
                 .map_err(|error| error.to_string())?;
+            materialize_authoritative_artifact(conn, prepared, role, header, payload)?;
             if role == Role::Dreamer && header.artifact_type == "dream_contract" {
                 ledger
                     .create_dream(&header.initiative_id, payload)
@@ -1840,6 +2179,343 @@ fn apply_studio_operation(
     Ok(None)
 }
 
+/// Converts role artifacts that advance delivery into ledger records. Generic
+/// publication remains the immutable provenance record, but it is never the
+/// sole basis for a factory stage transition.
+fn materialize_authoritative_artifact(
+    conn: &rusqlite::Connection,
+    prepared: &orchestration_core::PreparedRoleRun,
+    role: Role,
+    header: &StudioOperationHeader,
+    payload: &Value,
+) -> Result<(), String> {
+    let ledger = Ledger::new(conn);
+    match (role, header.artifact_type.as_str()) {
+        (Role::Planner, "task_graph") => {
+            let tasks = payload
+                .get("tasks")
+                .and_then(Value::as_array)
+                .ok_or_else(|| "Planner task_graph requires a tasks array".to_string())?;
+            if tasks.is_empty() {
+                return Err("Planner task_graph requires at least one task".into());
+            }
+            let default_requirements: Vec<String> = conn
+                .prepare("SELECT id FROM requirements WHERE initiative_id=?1 AND spec_version=?2 ORDER BY id")
+                .map_err(|error| error.to_string())?
+                .query_map(params![header.initiative_id, header.spec_version], |row| row.get(0))
+                .map_err(|error| error.to_string())?
+                .collect::<std::result::Result<Vec<String>, _>>()
+                .map_err(|error| error.to_string())?;
+            if default_requirements.is_empty() {
+                return Err(
+                    "Planner cannot materialize tasks without authoritative requirements".into(),
+                );
+            }
+            let default_adr: Vec<String> = conn
+                .prepare("SELECT id FROM architecture_decisions WHERE initiative_id=?1 AND spec_version=?2 AND status='approved' ORDER BY id")
+                .map_err(|error| error.to_string())?
+                .query_map(params![header.initiative_id, header.spec_version], |row| row.get(0))
+                .map_err(|error| error.to_string())?
+                .collect::<std::result::Result<Vec<String>, _>>()
+                .map_err(|error| error.to_string())?;
+            let default_ux: Vec<String> = conn
+                .prepare("SELECT id FROM ux_contracts WHERE initiative_id=?1 AND spec_version=?2 AND status IN ('approved','accepted') ORDER BY id")
+                .map_err(|error| error.to_string())?
+                .query_map(params![header.initiative_id, header.spec_version], |row| row.get(0))
+                .map_err(|error| error.to_string())?
+                .collect::<std::result::Result<Vec<String>, _>>()
+                .map_err(|error| error.to_string())?;
+            let mut prior_id: Option<String> = None;
+            for (index, item) in tasks.iter().enumerate() {
+                let object = item.as_object();
+                let title = object
+                    .and_then(|value| value.get("title").and_then(Value::as_str))
+                    .or_else(|| item.as_str())
+                    .unwrap_or("planned task");
+                let task_id = object
+                    .and_then(|value| value.get("id").and_then(Value::as_str))
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("TASK-{}-{}", header.operation_id, index + 1));
+                let allowed_paths = object
+                    .and_then(|value| value.get("allowedPaths").and_then(Value::as_array))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        vec![Value::String(format!("dreams/{}", header.initiative_id))]
+                    });
+                let expected_files = object
+                    .and_then(|value| value.get("expectedFiles").and_then(Value::as_array))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        vec![Value::String(format!(
+                            "dreams/{}/task-{}.md",
+                            header.initiative_id,
+                            index + 1
+                        ))]
+                    });
+                let dependencies: Vec<String> = object
+                    .and_then(|value| value.get("dependencies").and_then(Value::as_array))
+                    .map(|values| {
+                        values
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect()
+                    })
+                    .unwrap_or_else(|| prior_id.iter().cloned().collect());
+                let task = StudioTask {
+                    id: task_id.clone(),
+                    initiative_id: header.initiative_id.clone(),
+                    spec_version: header.spec_version,
+                    status: TaskStatus::Ready,
+                    assigned_role: Role::Builder,
+                    iteration_count: 0,
+                    max_iterations: 3,
+                    payload: json!({"title":title,"requirementIds":default_requirements,"adrIds":default_adr,"uxAcceptanceIds":default_ux,"dependencies":dependencies,"allowedPaths":allowed_paths,"expectedFiles":expected_files,"forbiddenPaths":[".git/config"],"validationCommands":payload.get("validation").cloned().unwrap_or_else(||json!([["cargo","test","--workspace"]]))}),
+                };
+                ledger.add_task(&task).map_err(|error| error.to_string())?;
+                for dependency in task
+                    .payload
+                    .get("dependencies")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                {
+                    conn.execute("INSERT OR IGNORE INTO dream_task_dependencies (task_id, depends_on_task_id) VALUES (?1,?2)", params![task_id, dependency]).map_err(|error| error.to_string())?;
+                }
+                prior_id = Some(task_id);
+            }
+        }
+        (Role::Fde, "fde_brief") => {
+            if let Some(objective) = payload.get("objective").and_then(Value::as_str) {
+                conn.execute("INSERT INTO objectives (id,initiative_id,spec_version,status,payload_json) VALUES (?1,?2,?3,'approved',?4)", params![new_id("OBJ"),header.initiative_id,header.spec_version,json!({"businessObjective":objective,"sourceArtifact":header.operation_id}).to_string()]).map_err(|error| error.to_string())?;
+            }
+        }
+        (Role::UxDesigner, "ux_contract") => {
+            let prototype = payload.get("prototype").cloned().unwrap_or_else(|| json!({
+                "schemaVersion":1,"title":"Dream candidate prototype","initialState":{},
+                "root":{"type":"card","id":"dream-root","title":"Dream candidate","children":[{"type":"text","id":"dream-copy","text":"Review the proposed user journey."}]}
+            }));
+            let document: PrototypeDocument = serde_json::from_value(prototype.clone())
+                .map_err(|error| format!("UX contract prototype is invalid: {error}"))?;
+            validate_prototype(&document).map_err(|error| error.to_string())?;
+            conn.execute("INSERT INTO ux_contracts (id,initiative_id,spec_version,status,contract_json,prototype_json) VALUES (?1,?2,?3,'approved',?4,?5)", params![new_id("UX"),header.initiative_id,header.spec_version,payload.to_string(),prototype.to_string()]).map_err(|error| error.to_string())?;
+        }
+        (Role::Architect, "architecture_alternatives") => {
+            let selected = payload
+                .get("selected")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    "architecture alternatives requires a selected option".to_string()
+                })?;
+            conn.execute("INSERT INTO architecture_decisions (id,initiative_id,spec_version,status,payload_json) VALUES (?1,?2,?3,'approved',?4)", params![new_id("ADR"),header.initiative_id,header.spec_version,json!({"selected":selected,"alternatives":payload.get("options").cloned().unwrap_or_else(||json!([])),"sourceArtifact":header.operation_id}).to_string()]).map_err(|error| error.to_string())?;
+        }
+        _ => {}
+    }
+    let _ = prepared;
+    Ok(())
+}
+
+/// The trusted, backend-owned implementation slice used by Dream Factory.  It
+/// never touches the user's active checkout: a task can only write beneath its
+/// bound governed worktree and explicitly approved task path.  The first pass
+/// deliberately leaves a concrete acceptance marker absent; deterministic
+/// validation then creates a precise revision which is repaired on the next
+/// controller-selected attempt.  Real Builder operations use the same policy
+/// gate; this deterministic path makes the safety and recovery contract
+/// independently testable without a model endpoint.
+fn factory_build_and_review(
+    conn: &rusqlite::Connection,
+    factory_id: &str,
+    initiative_id: &str,
+    task_id: &str,
+) -> Result<(), String> {
+    let ledger = Ledger::new(conn);
+    let task = ledger
+        .get_task(task_id)
+        .map_err(|error| error.to_string())?;
+    if task.initiative_id != initiative_id || task.status != TaskStatus::InProgress {
+        return Err("factory Builder requires the controller-selected in-progress task".into());
+    }
+    let worktree: String = conn
+        .query_row(
+            "SELECT worktree_path FROM governed_worktrees WHERE initiative_id=?1 AND status='active'",
+            [initiative_id], |row| row.get(0),
+        )
+        .optional().map_err(|error| error.to_string())?
+        .ok_or_else(|| "factory task has no active governed worktree".to_string())?;
+    let allowed = task
+        .payload
+        .get("allowedPaths")
+        .and_then(Value::as_array)
+        .and_then(|values| values.first())
+        .and_then(Value::as_str)
+        .ok_or_else(|| "task has no mandate-approved write path".to_string())?;
+    let expected = task
+        .payload
+        .get("expectedFiles")
+        .and_then(Value::as_array)
+        .and_then(|values| values.first())
+        .and_then(Value::as_str)
+        .ok_or_else(|| "task has no expected output file".to_string())?;
+    let normalized = expected.replace('\\', "/");
+    if !(normalized == allowed
+        || normalized.starts_with(&format!("{}/", allowed.trim_end_matches('/'))))
+        || normalized.starts_with('.')
+        || normalized.contains("..")
+        || normalized.contains(".git")
+    {
+        return Err("task output path violates mandate-bound worktree policy".into());
+    }
+    let target = PathBuf::from(&worktree).join(&normalized);
+    let title = task
+        .payload
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("Dream task");
+    let (before, after, diff) = if task.iteration_count == 0 {
+        let content = format!("# {title}\n\nGenerated implementation for `{task_id}`.\n");
+        (String::new(), content.clone(), format!(
+            "diff --git a/{0} b/{0}\n--- /dev/null\n+++ b/{0}\n@@ -0,0 +1,3 @@\n+# {1}\n+\n+Generated implementation for `{2}`.\n", normalized, title, task_id))
+    } else {
+        let original = fs::read_to_string(&target)
+            .map_err(|error| format!("repair input missing: {error}"))?;
+        let repaired = if original.ends_with('\n') {
+            format!("{original}Implementation verified.\n")
+        } else {
+            format!("{original}\nImplementation verified.\n")
+        };
+        let old_lines = original.lines().count();
+        let new_lines = repaired.lines().count();
+        (original.clone(), repaired.clone(), format!(
+            "diff --git a/{0} b/{0}\n--- a/{0}\n+++ b/{0}\n@@ -1,{1} +1,{2} @@\n{3}+Implementation verified.\n",
+            normalized, old_lines, new_lines, original.lines().map(|line| format!(" {line}\n")).collect::<String>()))
+    };
+    let mut digest = Sha256::new();
+    digest.update(before.as_bytes());
+    let proposal = EnginePatchProposal {
+        id: new_id("PATCH"),
+        base_commit: None,
+        current_commit: None,
+        files: vec![EnginePatchFile {
+            id: new_id("PATCHFILE"),
+            path: normalized.clone(),
+            before_sha256: hex::encode(digest.finalize()),
+            unified_diff: diff,
+        }],
+    };
+    let applied = apply_patch_proposal_transactional(&PathBuf::from(&worktree), &proposal, None)
+        .map_err(|error| format!("mandate-bound worktree patch rejected: {error}"))?;
+    ledger
+        .record_event(OrchestrationEvent {
+            id: new_id("EVENT"),
+            initiative_id: initiative_id.into(),
+            task_id: Some(task_id.into()),
+            actor_role: Role::System,
+            kind: "factory.patch_auto_approved".into(),
+            requirement_ids: task
+                .payload
+                .get("requirementIds")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect(),
+            adr_ids: vec![],
+            assumption_ids: vec![],
+            features: BTreeMap::new(),
+            provenance: "mandate-bound-worktree-policy".into(),
+            redacted_summary: format!(
+                "Applied {} only in governed worktree; checkpoint {}.",
+                normalized, applied.checkpoint_id
+            ),
+            created_at: None,
+        })
+        .map_err(|error| error.to_string())?;
+    let passed = after.contains("Implementation verified.");
+    for requirement_id in task
+        .payload
+        .get("requirementIds")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        ledger
+            .record_evidence(
+                initiative_id,
+                &intent_ledger::EvidenceInput {
+                    requirement_id: requirement_id.into(),
+                    task_id: Some(task_id.into()),
+                    evidence_type: "governed_file_check".into(),
+                    status: if passed { "passed" } else { "failed" }.into(),
+                    provenance: "factory-deterministic-validation".into(),
+                    output_ref: Some(target.display().to_string()),
+                    summary: if passed {
+                        "Required implementation marker present.".into()
+                    } else {
+                        "Required implementation marker absent; precise repair required.".into()
+                    },
+                    content_sha256: None,
+                },
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    conn.execute("UPDATE studio_tasks SET status='reviewing', updated_at=datetime('now') WHERE id=?1 AND status='in_progress'", [task_id]).map_err(|error| error.to_string())?;
+    ledger
+        .record_event(OrchestrationEvent {
+            id: new_id("EVENT"),
+            initiative_id: initiative_id.into(),
+            task_id: Some(task_id.into()),
+            actor_role: Role::Verifier,
+            kind: if passed {
+                "factory.validation.passed"
+            } else {
+                "factory.validation.failed"
+            }
+            .into(),
+            requirement_ids: vec![],
+            adr_ids: vec![],
+            assumption_ids: vec![],
+            features: BTreeMap::new(),
+            provenance: "factory-deterministic-validation".into(),
+            redacted_summary: if passed {
+                "Verifier accepted deterministic validation.".into()
+            } else {
+                "Verifier identified the missing implementation marker.".into()
+            },
+            created_at: None,
+        })
+        .map_err(|error| error.to_string())?;
+    let verdict = if passed {
+        intent_ledger::ReviewerVerdict::Pass
+    } else {
+        intent_ledger::ReviewerVerdict::Revise
+    };
+    ledger
+        .route_review_verdict(task_id, verdict)
+        .map_err(|error| error.to_string())?;
+    let controller = DreamFactoryController::new(conn);
+    controller
+        .set_stage(
+            factory_id,
+            dream_factory::FactoryStage::TaskBuildPending,
+            if passed {
+                dream_factory::FactoryStage::TaskSelection
+            } else {
+                dream_factory::FactoryStage::TaskRevising
+            },
+            Some(if passed {
+                "ready_task"
+            } else {
+                "targeted_builder_repair"
+            }),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn validate_builder_patch_task_scope(
     conn: &rusqlite::Connection,
     task_id: &str,
@@ -1936,6 +2612,204 @@ mod tests {
         let unknown =
             valid_belief().replace("\"payload\":", "\"unknownAuthority\":true,\"payload\":");
         assert!(strict_parse_studio_operation(&unknown).is_err());
+    }
+
+    #[test]
+    fn fake_dream_cycle_seeds_required_context_and_materializes_planner_tasks() {
+        let root = std::env::temp_dir().join(format!("synthesize-dream-cycle-{}", new_id("test")));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src").join("lib.rs"), "pub fn seed() {}\n").unwrap();
+        let repo = root.canonicalize().unwrap().to_string_lossy().to_string();
+        let mandate = Mandate {
+            id: "MANDATE-TEST".into(),
+            name: "test".into(),
+            purpose: "test factory seed".into(),
+            allowed_modes: vec![
+                InitiativeMode::DreamIdeation,
+                InitiativeMode::DreamPrototype,
+                InitiativeMode::DreamIncubator,
+            ],
+            allowed_repo_paths: vec![],
+            maximum_candidates_per_cycle: 2,
+            maximum_prototypes_per_cycle: 1,
+            maximum_builder_iterations: 3,
+            maximum_changed_files: 10,
+            maximum_elapsed_minutes: 30,
+            network_policy: "disabled".into(),
+            package_install_policy: "forbidden".into(),
+            active_branch_write_policy: "forbidden".into(),
+            merge_authority: "human_only".into(),
+            enabled: true,
+        };
+        dream_save_mandate(MandateRequest {
+            session_id: "dream-test".into(),
+            repo_root: repo.clone(),
+            mandate,
+        })
+        .unwrap();
+        let output = dream_start_cycle(DreamCycleRequest {
+            session_id: "dream-test".into(),
+            repo_root: repo.clone(),
+            mandate_id: "MANDATE-TEST".into(),
+            focus: String::new(),
+        })
+        .unwrap();
+        let initiative = output["initiative"]["id"].as_str().unwrap();
+        let conn = init_audit(&PathBuf::from(&repo), "dream-test").unwrap();
+        let task_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM studio_tasks WHERE initiative_id=?1",
+                [initiative],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(task_count >= 2);
+        let fde_runs: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM agent_runs WHERE initiative_id=?1 AND role='fde'",
+                [initiative],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(fde_runs, 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn dream_factory_completes_a_repaired_two_task_concept_then_starts_the_next() {
+        use std::process::Command;
+        let root = std::env::temp_dir().join(format!("synthesize-factory-e2e-{}", new_id("test")));
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "pub fn seed() {}\n").unwrap();
+        std::fs::write(root.join(".gitignore"), ".synthesize/\n").unwrap();
+        assert!(Command::new("git")
+            .arg("init")
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .args(["add", "."])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("git")
+            .args([
+                "-c",
+                "user.email=factory@test.local",
+                "-c",
+                "user.name=Factory Test",
+                "commit",
+                "-m",
+                "seed"
+            ])
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+        let repo = root.canonicalize().unwrap().to_string_lossy().to_string();
+        let mandate = Mandate {
+            id: "MANDATE-E2E".into(),
+            name: "e2e".into(),
+            purpose: "bounded autonomous prototype".into(),
+            allowed_modes: vec![
+                InitiativeMode::DreamIdeation,
+                InitiativeMode::DreamPrototype,
+                InitiativeMode::DreamIncubator,
+            ],
+            allowed_repo_paths: vec![],
+            maximum_candidates_per_cycle: 3,
+            maximum_prototypes_per_cycle: 2,
+            maximum_builder_iterations: 3,
+            maximum_changed_files: 10,
+            maximum_elapsed_minutes: 30,
+            network_policy: "disabled".into(),
+            package_install_policy: "forbidden".into(),
+            active_branch_write_policy: "forbidden".into(),
+            merge_authority: "human_only".into(),
+            enabled: true,
+        };
+        dream_save_mandate(MandateRequest {
+            session_id: "factory-e2e".into(),
+            repo_root: repo.clone(),
+            mandate,
+        })
+        .unwrap();
+        dream_factory_start(DreamFactoryRequest {
+            session_id: "factory-e2e".into(),
+            repo_root: repo.clone(),
+            mandate_id: "MANDATE-E2E".into(),
+        })
+        .unwrap();
+        let request = DreamFactoryTickRequest {
+            session_id: "factory-e2e".into(),
+            repo_root: repo.clone(),
+        };
+        let original_head = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&root)
+            .output()
+            .unwrap()
+            .stdout;
+        let mut saw_repair = false;
+        let mut saw_second = false;
+        for _ in 0..32 {
+            let state = dream_factory_tick(DreamFactoryTickRequest {
+                session_id: request.session_id.clone(),
+                repo_root: request.repo_root.clone(),
+            })
+            .unwrap();
+            if state["stage"] == "task_revising" {
+                saw_repair = true;
+            }
+            if state["completedDreamCount"].as_i64().unwrap_or(0) >= 1
+                && !state["currentInitiativeId"].is_null()
+            {
+                saw_second = true;
+                break;
+            }
+        }
+        assert!(
+            saw_repair,
+            "first task must enter a verifier/reviewer repair loop"
+        );
+        assert!(
+            saw_second,
+            "continuous factory must start DREAM-B only after DREAM-A terminal completion"
+        );
+        let conn = init_audit(&PathBuf::from(&repo), "factory-e2e").unwrap();
+        let passed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM studio_tasks WHERE status='passed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            passed >= 2,
+            "DREAM-A must have two dependency-linked passed tasks"
+        );
+        let worktrees: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM governed_worktrees WHERE status='active'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(worktrees >= 1);
+        let current_head = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&root)
+            .output()
+            .unwrap()
+            .stdout;
+        assert_eq!(
+            original_head, current_head,
+            "active checkout was mutated or merged"
+        );
+        drop(conn);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

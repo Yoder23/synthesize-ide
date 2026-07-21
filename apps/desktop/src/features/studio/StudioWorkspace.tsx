@@ -32,6 +32,7 @@ type RoleRuntime = {
   safetyMarginTokens: number; structuredOutputBehavior: string; capabilitySource: string;
   lastValidatedAt?: string | null;
 };
+type DreamFactoryState = { id: string; status: string; currentInitiativeId?: string | null; completedDreamCount: number; stopAfterCurrent: boolean; stage?: string | null; activeTaskId?: string | null; attemptCount: number; expectedArtifact?: string | null; waitingReason?: string | null };
 
 export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; repo: RepoBinding | null; sessionId: string }) {
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
@@ -51,6 +52,7 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
   const [message, setMessage] = useState<string | null>(null);
   const [continuousDream, setContinuousDream] = useState(false);
   const [mandateApproved, setMandateApproved] = useState(false);
+  const [factory, setFactory] = useState<DreamFactoryState | null>(null);
   const dreamCycleInFlight = useRef(false);
 
   const requestBase = useMemo(() => ({ session_id: sessionId, repo_root: repo?.repoRoot ?? '' }), [repo?.repoRoot, sessionId]);
@@ -67,15 +69,17 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
     setLoading(true);
     setError(null);
     try {
-      const [nextInitiatives, nextDreams, nextProfiles, nextRuntimes] = await Promise.all([
+      const [nextInitiatives, nextDreams, nextProfiles, nextRuntimes, nextFactory] = await Promise.all([
         invoke<Initiative[]>('studio_list_initiatives', { req: requestBase }),
         invoke<DreamInboxItem[]>('dream_list_inbox', { req: requestBase }),
         invoke<RoleProfile[]>('studio_role_profiles'),
-        invoke<RoleRuntime[]>('studio_list_role_runtimes', { req: requestBase })
+        invoke<RoleRuntime[]>('studio_list_role_runtimes', { req: requestBase }),
+        mode === 'dream' ? invoke<DreamFactoryState>('dream_factory_state', { req: requestBase }).catch(() => null) : Promise.resolve(null)
       ]);
       setInitiatives(nextInitiatives);
       setDreams(nextDreams);
       setRoleProfiles(nextProfiles);
+      setFactory(nextFactory);
       setRoleRuntimes((current) => Object.fromEntries(nextProfiles.map((profile) => {
         const persisted = nextRuntimes.find((runtime) => runtime.role === profile.role);
         return [profile.role, current[profile.role] ?? persisted ?? {
@@ -102,11 +106,18 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
     setContinuousDream(false);
     void refresh();
   }, [mode, repo?.repoRoot]);
+
+  // Polling is observation/transport only. `dream_factory_tick` owns stage
+  // selection and receives no role/task choice from React.
   useEffect(() => {
-    if (mode !== 'dream' || !continuousDream || !mandateApproved || !repo) return;
-    const timer = window.setInterval(() => { void startDreamCycle(); }, 60_000);
+    if (mode !== 'dream' || !repo || factory?.status !== 'running') return;
+    const timer = window.setInterval(() => {
+      void invoke<DreamFactoryState>('dream_factory_tick', { req: requestBase })
+        .then(setFactory)
+        .catch((reason) => setError(String(reason)));
+    }, 2000);
     return () => window.clearInterval(timer);
-  }, [continuousDream, mandateApproved, mode, repo?.repoRoot, dreamFocus]);
+  }, [mode, repo?.repoRoot, factory?.status, requestBase]);
 
   async function backendAction<T>(action: () => Promise<T>, success: string, useAsSnapshot = false) {
     setLoading(true);
@@ -136,7 +147,7 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
     if (id) setSelectedId(id);
   }
 
-  async function startDreamCycle(approveMandate = false) {
+  async function startDreamCycle(approveMandate = false, continuous = continuousDream) {
     if (!repo || dreamCycleInFlight.current) return;
     if (!approveMandate && !mandateApproved) {
       setError('Approve the repository-bound standing mandate before starting Dream cycles.');
@@ -160,11 +171,28 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
           await invoke('dream_save_mandate', { req: { ...requestBase, mandate } });
           setMandateApproved(true);
         }
-        return invoke('dream_start_cycle', { req: { ...requestBase, mandate_id: mandateId, focus: dreamFocus } });
+        const started = await invoke<DreamFactoryState>('dream_factory_start', { req: { ...requestBase, mandate_id: mandateId } });
+        setFactory(started);
+        if (!continuous) {
+          const bounded = await invoke<DreamFactoryState>('dream_factory_stop', { req: { ...requestBase, after_current: true } });
+          setFactory(bounded);
+        }
+        const next = await invoke<DreamFactoryState>('dream_factory_tick', { req: requestBase });
+        setFactory(next);
+        return next;
       }, 'Bounded Dream ideation completed without repository changes.');
     } finally {
       dreamCycleInFlight.current = false;
     }
+  }
+
+  async function controlFactory(action: 'pause' | 'resume' | 'stop_after_current' | 'stop') {
+    if (!repo) return;
+    const command = action === 'pause' ? 'dream_factory_pause' : action === 'resume' ? 'dream_factory_resume' : 'dream_factory_stop';
+    const state = await invoke<DreamFactoryState>(command, { req: { ...requestBase, after_current: action === 'stop_after_current' } });
+    setFactory(state);
+    setContinuousDream(action === 'resume');
+    setMessage(`Dream Factory ${action.replace(/_/g, ' ')} requested.`);
   }
 
   async function control(action: string) {
@@ -292,9 +320,9 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
           <button className="primary" onClick={createStudio} disabled={loading || !prompt.trim()}>Start Studio discovery</button>
         </> : <>
           <div className="dream-autoprompt"><strong>Background Dreamer brief</strong><span>Invent, challenge, and shape a new app idea for this repository. No user prompt is required.</span></div>
-          <button className="primary" onClick={() => void startDreamCycle(true)} disabled={loading}>Approve mandate & run one bounded cycle</button>
-          <label className="dream-continuous"><input type="checkbox" checked={continuousDream} onChange={(event) => { const enabled = event.target.checked; setContinuousDream(enabled); if (enabled) void startDreamCycle(true); }} />Repeat bounded cycles continuously while Synthesize is open</label>
-          <span className="small">Checking this saves the mandate and starts the first cycle. Each completed idea starts the next bounded idea cycle. Stop by unchecking or closing Synthesize.</span>
+          <button className="primary" onClick={() => void startDreamCycle(true, false)} disabled={loading}>Approve mandate & run one bounded cycle</button>
+          <label className="dream-continuous"><input type="checkbox" checked={continuousDream} onChange={(event) => { const enabled = event.target.checked; setContinuousDream(enabled); if (enabled) void startDreamCycle(true, true); else void controlFactory('stop_after_current'); }} />Run Dream Factory continuously</label>
+          <div className="dream-factory-controls"><span className="small">Factory: {factory?.status ?? 'not started'} · stage: {factory?.stage ?? 'idle'} · concept: {factory?.currentInitiativeId ?? 'none'} · active task: {factory?.activeTaskId ?? 'none'} · attempt: {factory?.attemptCount ?? 0} · expects: {factory?.expectedArtifact ?? 'none'} · completed: {factory?.completedDreamCount ?? 0}{factory?.waitingReason ? ` · blocker: ${factory.waitingReason}` : ''}</span><button onClick={() => void controlFactory('pause')} disabled={!factory || factory.status !== 'running'}>Pause</button><button onClick={() => void controlFactory('resume')} disabled={!factory || factory.status === 'running'}>Resume</button><button onClick={() => void controlFactory('stop_after_current')} disabled={!factory}>Stop after current</button><button onClick={() => void controlFactory('stop')} disabled={!factory}>Stop now</button></div>
         </>}
         <select value={selectedId ?? ''} onChange={(event) => void loadSnapshot(event.target.value)} aria-label="Initiative">
           <option value="">Select initiative</option>

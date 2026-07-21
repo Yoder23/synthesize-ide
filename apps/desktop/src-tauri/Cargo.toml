@@ -21,6 +21,7 @@ orchestration-core = { path = "../../../crates/orchestration-core" }
 context-os = { path = "../../../crates/context-os" }
 pulse-engine = { path = "../../../crates/pulse-engine" }
 worktree-manager = { path = "../../../crates/worktree-manager" }
+dream-factory = { path = "../../../crates/dream-factory" }
 rusqlite = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }

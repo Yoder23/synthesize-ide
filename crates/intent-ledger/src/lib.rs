@@ -1255,6 +1255,42 @@ impl<'a> Ledger<'a> {
         self.get_initiative(initiative_id)
     }
 
+    /// Trusted backend policy used after a local human starts a factory with a
+    /// persisted mandate. It is deliberately narrower than `set_dream_mode`:
+    /// it can only create an isolated prototype lane and never grants merge,
+    /// active-tree, network, or package-install authority.
+    pub fn raise_dream_mode_by_mandate(&self, initiative_id: &str) -> Result<Initiative> {
+        let initiative = self.get_initiative(initiative_id)?;
+        if initiative.mode != InitiativeMode::DreamIdeation {
+            return Err(LedgerError::InvalidTransition(
+                "mandate policy may only raise DreamIdeation to DreamPrototype".into(),
+            ));
+        }
+        let mandate_id = initiative.standing_mandate_id.as_deref().ok_or_else(|| {
+            LedgerError::Binding("Dream initiative has no mandate binding".into())
+        })?;
+        self.require_enabled_mandate(
+            &initiative.session_id,
+            &initiative.repo_root,
+            mandate_id,
+            InitiativeMode::DreamPrototype,
+        )?;
+        self.conn.execute(
+            "UPDATE initiatives SET mode='dream_prototype', autonomy_level=1, updated_at=datetime('now') WHERE id=?1 AND mode='dream_ideation'",
+            [initiative_id],
+        )?;
+        self.record_event(OrchestrationEvent {
+            id: new_id("EVENT"), initiative_id: initiative_id.into(), task_id: None,
+            actor_role: Role::System, kind: "dream.mandate_bound_prototype_authorized".into(),
+            requirement_ids: vec![], adr_ids: vec![], assumption_ids: vec![],
+            features: BTreeMap::from([("autonomyLevel".into(), 1.0), ("mandateBound".into(), 1.0)]),
+            provenance: "mandate-bound-worktree-policy".into(),
+            redacted_summary: "Standing mandate authorized an isolated Dream prototype; active branch and merge remain forbidden.".into(),
+            created_at: None,
+        })?;
+        self.get_initiative(initiative_id)
+    }
+
     pub fn record_event(&self, event: OrchestrationEvent) -> Result<String> {
         if event.redacted_summary.chars().count() > 1000 {
             return Err(LedgerError::Validation(
