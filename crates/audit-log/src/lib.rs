@@ -35,6 +35,12 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
         "dream_factory_controller",
         include_str!("../migrations/005_dream_factory_controller.sql"),
     )?;
+    apply_migration(
+        conn,
+        6,
+        "autonomous_app_foundry",
+        include_str!("../migrations/006_app_foundry.sql"),
+    )?;
     Ok(())
 }
 
@@ -118,7 +124,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         init_schema(&conn).unwrap();
         init_schema(&conn).unwrap();
-        assert_eq!(current_schema_version(&conn).unwrap(), 5);
+        assert_eq!(current_schema_version(&conn).unwrap(), 6);
         assert_eq!(
             applied_migrations(&conn).unwrap(),
             vec![
@@ -207,6 +213,6 @@ mod tests {
             )
             .unwrap();
         assert_eq!(title, "Persistent");
-        assert_eq!(current_schema_version(&reopened).unwrap(), 5);
+        assert_eq!(current_schema_version(&reopened).unwrap(), 6);
     }
 }

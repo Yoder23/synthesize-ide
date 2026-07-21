@@ -5345,6 +5345,8 @@ fn main() {
             studio_control,
             studio_export_proof,
             dream_save_mandate,
+            dream_approve_output_root,
+            dream_list_applications,
             dream_factory_start,
             dream_factory_state,
             dream_factory_pause,
@@ -6134,7 +6136,7 @@ mod tests {
             destination_warning: "local endpoint".into(),
             char_estimate: 256,
             runtime: "local-server".into(),
-            model: "qwen3-coder".into(),
+            model: "qwen3-coder:latest".into(),
             model_context_window_tokens: 32_768,
             reserved_output_tokens: 900,
             safety_margin_tokens: 1_024,
@@ -6156,13 +6158,30 @@ mod tests {
             "INSERT INTO context_bundles (id, session_id, token_estimate, payload_json) VALUES (?1, ?2, ?3, ?4)",
             params!["ctx-qwen3-ollama", "s", 256_i64, serde_json::to_string(&context).unwrap()],
         ).unwrap();
+        upsert_runtime_capability(
+            &conn,
+            &RuntimeCapability {
+                id: "CAP-QWEN-SMOKE".into(),
+                session_id: "s".into(),
+                runtime: "local-server".into(),
+                model: "qwen3-coder:latest".into(),
+                context_window_tokens: 262_144,
+                maximum_output_tokens: 4_096,
+                token_estimation_method: "conservative_utf8_bytes_div3".into(),
+                safety_margin_tokens: 1_024,
+                structured_output_behavior: "json_object".into(),
+                capability_source: "local-ollama-smoke".into(),
+                last_validated_at: "test".into(),
+            },
+        )
+        .unwrap();
 
         let result = runtime_generate(RuntimeGenerateRequest {
             session_id: "s".into(),
             repo_root: repo.to_string_lossy().to_string(),
             provider: "local-server".into(),
             endpoint_url: "http://127.0.0.1:11434/v1".into(),
-            model: "qwen3-coder".into(),
+            model: "qwen3-coder:latest".into(),
             temperature: 0.1,
             max_tokens: 900,
             response_format: Some("json_schema".into()),

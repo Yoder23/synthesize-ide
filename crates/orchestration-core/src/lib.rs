@@ -665,7 +665,7 @@ pub fn fake_role_artifact(role: Role, scenario: FakeScenario, initiative: &Initi
             json!({"type":"architecture_alternatives","base":base,"options":[{"id":"A","design":"focused Rust crates","reversibility":"high"},{"id":"B","design":"desktop-only module","reversibility":"medium"}],"selected":"A"})
         }
         Role::Planner => {
-            json!({"type":"task_graph","base":base,"tasks":["TASK-FOUNDATION","TASK-UI"],"validation":["cargo test --workspace","pnpm test"]})
+            json!({"type":"task_graph","base":base,"tasks":["TASK-FOUNDATION","TASK-EXPERIENCE","TASK-POLISH"],"validation":["offline_web_v1 structural validation","offline_web_v1 launch check"]})
         }
         Role::Builder => {
             json!({"type":"patch_proposal","base":base,"typedOperationsOnly":true,"status": if scenario == FakeScenario::BudgetStop {"blocked"} else {"proposed"}})
@@ -768,6 +768,14 @@ pub fn prepare_role_run(
     model: &str,
 ) -> Result<PreparedRoleRun> {
     let initiative = Ledger::new(conn).get_initiative(initiative_id)?;
+    let application_workspace: Option<String> = if matches!(
+        role,
+        Role::Builder | Role::Verifier | Role::Reviewer
+    ) {
+        conn.query_row("SELECT workspace_path FROM dream_applications WHERE initiative_id=?1 AND status IN ('building','polishing')",[initiative_id],|row|row.get(0)).optional()?
+    } else {
+        None
+    };
     let run_id = new_id("RUN");
     if runtime == "fake" {
         ensure_fake_capability(conn, &initiative.session_id, model)?;
@@ -786,7 +794,11 @@ pub fn prepare_role_run(
         reserved_output_tokens: None,
         maximum_compiled_input_tokens: None,
         retrieval: vec![],
-        repo_root: Some(std::path::Path::new(&initiative.repo_root)),
+        repo_root: Some(std::path::Path::new(
+            application_workspace
+                .as_deref()
+                .unwrap_or(&initiative.repo_root),
+        )),
     }) {
         Ok(context) => context,
         Err(

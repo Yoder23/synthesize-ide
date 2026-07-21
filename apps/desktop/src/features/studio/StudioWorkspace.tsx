@@ -53,6 +53,7 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
   const [continuousDream, setContinuousDream] = useState(false);
   const [mandateApproved, setMandateApproved] = useState(false);
   const [factory, setFactory] = useState<DreamFactoryState | null>(null);
+  const [dreamOutputRoot, setDreamOutputRoot] = useState('C:\\SynthesizeDreams');
   const dreamCycleInFlight = useRef(false);
 
   const requestBase = useMemo(() => ({ session_id: sessionId, repo_root: repo?.repoRoot ?? '' }), [repo?.repoRoot, sessionId]);
@@ -171,7 +172,9 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
           await invoke('dream_save_mandate', { req: { ...requestBase, mandate } });
           setMandateApproved(true);
         }
-        const started = await invoke<DreamFactoryState>('dream_factory_start', { req: { ...requestBase, mandate_id: mandateId } });
+        if (!dreamOutputRoot.trim()) throw new Error('Choose a Dream application output folder.');
+        const approvedRoot = await invoke<{ id: string }>('dream_approve_output_root', { req: { ...requestBase, output_root: dreamOutputRoot.trim() } });
+        const started = await invoke<DreamFactoryState>('dream_factory_start', { req: { ...requestBase, mandate_id: mandateId, output_root_id: approvedRoot.id } });
         setFactory(started);
         if (!continuous) {
           const bounded = await invoke<DreamFactoryState>('dream_factory_stop', { req: { ...requestBase, after_current: true } });
@@ -320,6 +323,7 @@ export function StudioWorkspace({ mode, repo, sessionId }: { mode: ProductMode; 
           <button className="primary" onClick={createStudio} disabled={loading || !prompt.trim()}>Start Studio discovery</button>
         </> : <>
           <div className="dream-autoprompt"><strong>Background Dreamer brief</strong><span>Invent, challenge, and shape a new app idea for this repository. No user prompt is required.</span></div>
+          <label className="dream-output-root"><span>Dream application folder</span><input value={dreamOutputRoot} onChange={(event) => setDreamOutputRoot(event.target.value)} aria-label="Dream application output folder" /></label>
           <button className="primary" onClick={() => void startDreamCycle(true, false)} disabled={loading}>Approve mandate & run one bounded cycle</button>
           <label className="dream-continuous"><input type="checkbox" checked={continuousDream} onChange={(event) => { const enabled = event.target.checked; setContinuousDream(enabled); if (enabled) void startDreamCycle(true, true); else void controlFactory('stop_after_current'); }} />Run Dream Factory continuously</label>
           <div className="dream-factory-controls"><span className="small">Factory: {factory?.status ?? 'not started'} · stage: {factory?.stage ?? 'idle'} · concept: {factory?.currentInitiativeId ?? 'none'} · active task: {factory?.activeTaskId ?? 'none'} · attempt: {factory?.attemptCount ?? 0} · expects: {factory?.expectedArtifact ?? 'none'} · completed: {factory?.completedDreamCount ?? 0}{factory?.waitingReason ? ` · blocker: ${factory.waitingReason}` : ''}</span><button onClick={() => void controlFactory('pause')} disabled={!factory || factory.status !== 'running'}>Pause</button><button onClick={() => void controlFactory('resume')} disabled={!factory || factory.status === 'running'}>Resume</button><button onClick={() => void controlFactory('stop_after_current')} disabled={!factory}>Stop after current</button><button onClick={() => void controlFactory('stop')} disabled={!factory}>Stop now</button></div>

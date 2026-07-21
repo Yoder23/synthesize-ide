@@ -4,6 +4,7 @@ use super::{
     verify_endpoint_approval, PatchProposalRequest, RuntimeMessage,
 };
 use agent_protocol::{AgentOperation, StudioOperationHeader};
+use app_foundry::ApplicationWorkspaceManager;
 use audit_log::new_id;
 use context_os::{
     projection_policy, record_context_request, upsert_runtime_capability,
@@ -35,6 +36,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::sync::{mpsc, OnceLock};
 use std::time::{Duration, Instant};
 use worktree_manager::WorktreeManager;
@@ -102,6 +104,14 @@ pub(crate) struct DreamFactoryRequest {
     session_id: String,
     repo_root: String,
     mandate_id: String,
+    output_root_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DreamOutputRootRequest {
+    session_id: String,
+    repo_root: String,
+    output_root: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -521,6 +531,37 @@ pub(crate) fn dream_save_mandate(req: MandateRequest) -> Result<Value, String> {
     })
 }
 
+/// Human approval boundary for standalone generated applications. The model
+/// never supplies this path; it can only propose a bounded slug below it.
+#[tauri::command]
+pub(crate) fn dream_approve_output_root(req: DreamOutputRootRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    let id = ApplicationWorkspaceManager::new(&conn)
+        .approve_output_root(&req.session_id, &PathBuf::from(req.output_root))
+        .map_err(|error| error.to_string())?;
+    Ok(json!({"id":id,"approved":true}))
+}
+
+#[tauri::command]
+pub(crate) fn dream_list_applications(req: StudioRepoRequest) -> Result<Value, String> {
+    let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
+    let conn =
+        init_audit(&PathBuf::from(&repo), &req.session_id).map_err(|error| error.to_string())?;
+    let mut statement = conn.prepare("SELECT manifest_json FROM dream_applications a JOIN initiatives i ON i.id=a.initiative_id WHERE i.session_id=?1 AND i.repo_root=?2 ORDER BY a.created_at DESC").map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![req.session_id, repo], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+    let applications: Result<Vec<Value>, String> = rows
+        .map(|row| {
+            row.map_err(|error| error.to_string())
+                .and_then(|value| serde_json::from_str(&value).map_err(|error| error.to_string()))
+        })
+        .collect();
+    Ok(json!(applications?))
+}
+
 #[tauri::command]
 pub(crate) fn dream_factory_start(req: DreamFactoryRequest) -> Result<Value, String> {
     let repo = canonical(&req.repo_root).map_err(|error| error.to_string())?;
@@ -530,7 +571,21 @@ pub(crate) fn dream_factory_start(req: DreamFactoryRequest) -> Result<Value, Str
     let state = controller
         .start_factory(&req.session_id, &repo, &req.mandate_id)
         .map_err(|error| error.to_string())?;
-    serde_json::to_value(state).map_err(|error| error.to_string())
+    let approved: i64 = conn.query_row("SELECT COUNT(*) FROM dream_output_roots WHERE id=?1 AND session_id=?2 AND enabled=1 AND approved_by_source='local-user'", params![req.output_root_id,req.session_id], |row| row.get(0)).map_err(|error| error.to_string())?;
+    if approved != 1 {
+        return Err("Dream Factory requires a user-approved output root".into());
+    }
+    conn.execute(
+        "UPDATE dream_factories SET output_root_id=?2,dream_target='new_application' WHERE id=?1",
+        params![state.id, req.output_root_id],
+    )
+    .map_err(|error| error.to_string())?;
+    serde_json::to_value(
+        controller
+            .load(&req.session_id, &repo)
+            .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -639,14 +694,55 @@ pub(crate) fn dream_factory_tick(req: DreamFactoryTickRequest) -> Result<Value, 
             Ledger::new(&conn)
                 .raise_dream_mode_by_mandate(&initiative_id)
                 .map_err(|error| error.to_string())?;
-            controller
-                .set_stage(
-                    &state.id,
-                    dream_factory::FactoryStage::ScopeGate,
-                    dream_factory::FactoryStage::WorktreePending,
-                    Some("governed_worktree"),
+            let output_root_id: Option<String> = conn
+                .query_row(
+                    "SELECT output_root_id FROM dream_factories WHERE id=?1",
+                    [&state.id],
+                    |row| row.get(0),
                 )
-                .map_err(|error| error.to_string())?;
+                .optional()
+                .map_err(|error| error.to_string())?
+                .flatten();
+            if let Some(output_root_id) = output_root_id {
+                let title: String = conn.query_row("SELECT json_extract(payload_json,'$.title') FROM dream_contracts WHERE initiative_id=?1 ORDER BY rowid DESC LIMIT 1", [&initiative_id], |row| row.get(0)).map_err(|error| error.to_string())?;
+                let slug = format!(
+                    "dream-{}",
+                    initiative_id
+                        .to_ascii_lowercase()
+                        .replace('_', "-")
+                        .replace(
+                            |character: char| !character.is_ascii_alphanumeric()
+                                && character != '-',
+                            ""
+                        )
+                );
+                ApplicationWorkspaceManager::new(&conn)
+                    .create_offline_web_app(
+                        &req.session_id,
+                        &initiative_id,
+                        &output_root_id,
+                        &title,
+                        &slug,
+                    )
+                    .map_err(|error| error.to_string())?;
+                controller
+                    .set_stage(
+                        &state.id,
+                        dream_factory::FactoryStage::ScopeGate,
+                        dream_factory::FactoryStage::TaskSelection,
+                        Some("ready_task"),
+                    )
+                    .map_err(|error| error.to_string())?;
+            } else {
+                controller
+                    .set_stage(
+                        &state.id,
+                        dream_factory::FactoryStage::ScopeGate,
+                        dream_factory::FactoryStage::WorktreePending,
+                        Some("governed_worktree"),
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
         }
         Some("worktree_pending") => {
             let manager = WorktreeManager::new(&conn, PathBuf::from(&repo));
@@ -719,23 +815,7 @@ pub(crate) fn dream_factory_tick(req: DreamFactoryTickRequest) -> Result<Value, 
                 .map_err(|error| error.to_string())?;
         }
         Some("final_ux_review") => {
-            Ledger::new(&conn)
-                .record_event(OrchestrationEvent {
-                    id: new_id("EVENT"),
-                    initiative_id: initiative_id.clone(),
-                    task_id: None,
-                    actor_role: Role::UxDesigner,
-                    kind: "factory.final_ux_review.passed".into(),
-                    requirement_ids: vec![],
-                    adr_ids: vec![],
-                    assumption_ids: vec![],
-                    features: BTreeMap::new(),
-                    provenance: "factory-controller".into(),
-                    redacted_summary:
-                        "Final UX conformance accepted from materialized UX contract.".into(),
-                    created_at: None,
-                })
-                .map_err(|error| error.to_string())?;
+            invoke_factory_final_role(&conn, &initiative_id, Role::UxDesigner)?;
             controller
                 .set_stage(
                     &state.id,
@@ -746,7 +826,41 @@ pub(crate) fn dream_factory_tick(req: DreamFactoryTickRequest) -> Result<Value, 
                 .map_err(|error| error.to_string())?;
         }
         Some("final_fde_review") => {
-            Ledger::new(&conn).record_event(OrchestrationEvent { id:new_id("EVENT"), initiative_id:initiative_id.clone(), task_id:None, actor_role:Role::Fde, kind:"factory.final_fde_review.passed".into(), requirement_ids:vec![], adr_ids:vec![], assumption_ids:vec![], features:BTreeMap::new(), provenance:"factory-controller".into(), redacted_summary:"Final outcome review accepted; candidate is reviewable and remains unmerged.".into(), created_at:None }).map_err(|error| error.to_string())?;
+            for role in [
+                Role::Dreamer,
+                Role::Skeptic,
+                Role::Fde,
+                Role::Architect,
+                Role::Planner,
+                Role::Builder,
+                Role::Verifier,
+                Role::Reviewer,
+            ] {
+                invoke_factory_final_role(&conn, &initiative_id, role)?;
+            }
+            let workspace: String = conn
+                .query_row(
+                    "SELECT workspace_path FROM dream_applications WHERE initiative_id=?1",
+                    [&initiative_id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| error.to_string())?;
+            ApplicationWorkspaceManager::new(&conn)
+                .validate_offline_web_app(&PathBuf::from(&workspace))
+                .map_err(|error| format!("final launch validation failed: {error}"))?;
+            verify_application_launch(&PathBuf::from(&workspace))?;
+            let manifest: String = conn
+                .query_row(
+                    "SELECT manifest_json FROM dream_applications WHERE initiative_id=?1",
+                    [&initiative_id],
+                    |row| row.get(0),
+                )
+                .map_err(|error| error.to_string())?;
+            let mut manifest: Value =
+                serde_json::from_str(&manifest).map_err(|error| error.to_string())?;
+            manifest["status"] = json!("runnable_candidate");
+            manifest["completedAt"] = json!(chrono_like_timestamp());
+            conn.execute("UPDATE dream_applications SET status='runnable_candidate',manifest_json=?2,completed_at=datetime('now') WHERE initiative_id=?1",params![initiative_id,manifest.to_string()]).map_err(|error|error.to_string())?;
             controller
                 .complete_concept(&state.id, dream_factory::FactoryStage::CandidateComplete)
                 .map_err(|error| error.to_string())?;
@@ -759,6 +873,135 @@ pub(crate) fn dream_factory_tick(req: DreamFactoryTickRequest) -> Result<Value, 
             .map_err(|error| error.to_string())?,
     )
     .map_err(|error| error.to_string())
+}
+
+fn chrono_like_timestamp() -> String {
+    format!(
+        "unix-nanos:{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or(0)
+    )
+}
+
+fn verify_application_launch(workspace: &std::path::Path) -> Result<(), String> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    drop(listener);
+    let mut command = Command::new("python");
+    command
+        .args([
+            "-m",
+            "http.server",
+            &port.to_string(),
+            "--bind",
+            "127.0.0.1",
+            "--directory",
+            &workspace.to_string_lossy(),
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("trusted preview server failed to start: {e}"))?;
+    let url = format!("http://127.0.0.1:{port}/index.html");
+    let mut healthy = false;
+    for _ in 0..30 {
+        match ureq::get(&url).timeout(Duration::from_secs(1)).call() {
+            Ok(response) if response.status() == 200 => {
+                healthy = true;
+                break;
+            }
+            _ => std::thread::sleep(Duration::from_millis(100)),
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    if !healthy {
+        return Err("application preview did not serve index.html successfully".into());
+    }
+    Ok(())
+}
+
+fn invoke_factory_final_role(
+    conn: &rusqlite::Connection,
+    initiative_id: &str,
+    role: Role,
+) -> Result<(), String> {
+    let task = if matches!(role, Role::Builder | Role::Verifier | Role::Reviewer) {
+        conn.query_row("SELECT id FROM studio_tasks WHERE initiative_id=?1 AND status='passed' ORDER BY rowid DESC LIMIT 1",[initiative_id],|row|row.get::<_,String>(0)).optional().map_err(|error|error.to_string())?
+    } else {
+        None
+    };
+    let config = factory_role_runtime(conn, initiative_id, role)?;
+    let prepared = prepare_role_run(
+        conn,
+        initiative_id,
+        task.as_deref(),
+        role,
+        &config.0,
+        &config.1,
+    )
+    .map_err(|error| error.to_string())?;
+    if config.0 == "fake" {
+        let initiative = Ledger::new(conn)
+            .get_initiative(initiative_id)
+            .map_err(|error| error.to_string())?;
+        let payload = fake_role_artifact(role, FakeScenario::SuccessfulStudio, &initiative);
+        let artifact_type = payload
+            .get("type")
+            .and_then(Value::as_str)
+            .unwrap_or("finding");
+        Ledger::new(conn)
+            .publish_artifact(
+                &ArtifactEnvelope {
+                    operation_id: new_id("OP"),
+                    initiative_id: initiative_id.into(),
+                    task_id: task.clone(),
+                    role,
+                    artifact_type: artifact_type.into(),
+                    schema_version: 1,
+                    spec_version: initiative.active_spec_version,
+                    source_context_bundle_id: Some(prepared.context_capsule.id.clone()),
+                    reason: "Deterministic final convergence fixture".into(),
+                    expected_outcome: "Persist role-specific final evidence".into(),
+                    payload,
+                },
+                Some(&prepared.run_id),
+                "Final convergence fixture artifact.",
+            )
+            .map_err(|error| error.to_string())?;
+    } else {
+        let lease = studio_role_scheduler()
+            .acquire(&prepared.run_id)
+            .map_err(|error| error.to_string())?;
+        let result = run_configured_role(
+            conn,
+            &prepared,
+            &config.0,
+            &config.1,
+            config.2.as_deref(),
+            config.3,
+        );
+        drop(lease);
+        result?;
+    }
+    complete_role_run(
+        conn,
+        &prepared,
+        "completed",
+        "final_convergence_artifact",
+        None,
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1031,6 +1274,9 @@ fn run_dream_team(
         Role::UxDesigner,
         Role::Architect,
         Role::Planner,
+        Role::Builder,
+        Role::Verifier,
+        Role::Reviewer,
     ];
     let mut results = Vec::new();
     for (index, role) in roles.into_iter().enumerate() {
@@ -1051,8 +1297,26 @@ fn run_dream_team(
                 fallback_timeout,
             )
         });
-        let prepared = prepare_role_run(conn, &initiative.id, None, role, &runtime, &model)
-            .map_err(|error| error.to_string())?;
+        let task_binding = if matches!(role, Role::Builder | Role::Verifier | Role::Reviewer) {
+            conn.query_row(
+                "SELECT id FROM studio_tasks WHERE initiative_id=?1 ORDER BY rowid LIMIT 1",
+                [&initiative.id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+        } else {
+            None
+        };
+        let prepared = prepare_role_run(
+            conn,
+            &initiative.id,
+            task_binding.as_deref(),
+            role,
+            &runtime,
+            &model,
+        )
+        .map_err(|error| error.to_string())?;
         // Fake Runtime is deterministic local fixture work, not model
         // inference.  It must not contend with a real single-inference lease
         // (in particular when integration fixtures run in parallel).
@@ -1085,7 +1349,7 @@ fn run_dream_team(
                 results.push(
                     json!({"role": role.as_str(), "status": "completed", "operation": value}),
                 );
-                if let Some(factory_id) = factory_id {
+                if let Some(factory_id) = factory_id.filter(|_| index < 5) {
                     let (from, to, expected) = match index {
                         0 => (
                             dream_factory::FactoryStage::DreamPending,
@@ -1127,8 +1391,64 @@ fn run_dream_team(
                     Some(&error),
                 )
                 .map_err(|completion| completion.to_string())?;
-                results.push(json!({"role": role.as_str(), "status": "failed", "error": error}));
+                return Err(format!(
+                    "{} Product Council stage failed: {error}",
+                    role.as_str()
+                ));
             }
+        }
+    }
+    // The Dreamer synthesizes the complete Council record into the next
+    // concept version before construction. This is a real second invocation,
+    // with the Council artifacts present in its Context Capsule.
+    let synthesis = prepare_role_run(
+        conn,
+        &initiative.id,
+        None,
+        Role::Dreamer,
+        fallback_runtime,
+        fallback_model,
+    )
+    .map_err(|error| error.to_string())?;
+    let synthesis_result = if fallback_runtime == "fake" {
+        run_fake_single_role(conn, &synthesis)
+    } else {
+        let lease = studio_role_scheduler()
+            .acquire(&synthesis.run_id)
+            .map_err(|error| error.to_string())?;
+        let result = run_configured_role(
+            conn,
+            &synthesis,
+            fallback_runtime,
+            fallback_model,
+            fallback_endpoint,
+            fallback_timeout,
+        );
+        drop(lease);
+        result
+    };
+    match synthesis_result {
+        Ok(value) => {
+            complete_role_run(
+                conn,
+                &synthesis,
+                "completed",
+                "product_council_concept_revision",
+                None,
+            )
+            .map_err(|error| error.to_string())?;
+            results.push(json!({"role":"dreamer","status":"concept_revised","operation":value}));
+        }
+        Err(error) => {
+            complete_role_run(
+                conn,
+                &synthesis,
+                "failed",
+                "concept_revision_failed",
+                Some(&error),
+            )
+            .map_err(|completion| completion.to_string())?;
+            return Err(error);
         }
     }
     Ok(results)
@@ -1543,6 +1863,7 @@ fn run_configured_role(
             content: message.content.clone(),
         })
         .collect();
+    let retry_messages = messages.clone();
     let (sender, receiver) = mpsc::sync_channel(1);
     let provider_owned = provider.to_string();
     let endpoint_owned = endpoint.to_string();
@@ -1577,7 +1898,7 @@ fn run_configured_role(
     });
     let started = Instant::now();
     let timeout = Duration::from_secs(timeout_seconds.clamp(1, 1800) as u64);
-    let content = loop {
+    let mut content = loop {
         studio_role_scheduler()
             .check(&prepared.run_id, started, timeout)
             .map_err(|error| error.to_string())?;
@@ -1600,50 +1921,104 @@ fn run_configured_role(
         record_context_generation_failure(conn, prepared, &error)?;
         return Err(error);
     }
+    let constructing: bool = conn.query_row("SELECT COUNT(*) FROM dream_applications WHERE initiative_id=?1 AND status IN ('building','polishing')",[&prepared.context_capsule.initiative_id],|row|row.get::<_,i64>(0)).unwrap_or(0)>0;
+    if !role_output_shape_valid(&content, prepared.role, constructing) {
+        let mut repair_messages = retry_messages;
+        repair_messages.push(RuntimeMessage{role:"user".into(),content:format!("Protocol repair: return exactly one JSON object for the {} stage; no prose or fences. Required shape: {}",prepared.role.as_str(),role_repair_schema(prepared.role))});
+        content = match provider {
+            "cloud-openai" => call_cloud_openai(
+                endpoint,
+                model,
+                &repair_messages,
+                0.0,
+                maximum_output_tokens,
+            ),
+            "cloud-anthropic" => {
+                call_cloud_anthropic(endpoint, model, &repair_messages, maximum_output_tokens)
+            }
+            _ => call_openai_compatible_endpoint(
+                endpoint,
+                model,
+                &repair_messages,
+                0.0,
+                maximum_output_tokens,
+                Some("json_object"),
+            ),
+        }
+        .map_err(|error| format!("{} protocol repair failed: {error}", prepared.role.as_str()))?;
+    }
     let operation = match strict_parse_studio_operation(&content) {
         Ok(operation) => operation,
-        Err(error) if prepared.role == Role::Dreamer => {
-            // Dreamers commonly return the contract object itself even when
-            // the protocol prompt asks for an envelope. Normalize that
-            // bounded shape into the governed operation without relaxing any
-            // role, repository, spec, or context binding checks.
-            let direct = serde_json::from_str::<Value>(content.trim())
-                .ok()
-                .or_else(|| {
-                    let trimmed = content.trim();
-                    trimmed
-                        .strip_prefix("```json\n")
-                        .and_then(|value| value.strip_suffix("\n```"))
-                        .and_then(|value| serde_json::from_str::<Value>(value).ok())
-                });
-            if let Some(payload) = direct
-                .filter(|value| value.get("type").and_then(Value::as_str) == Some("dream_contract"))
-            {
+        Err(error) => {
+            // Local structured-output models sometimes return the requested
+            // role artifact without its transport envelope. Rebind that
+            // bounded object to the persisted run/capsule; never accept model
+            // supplied initiative, task, role, spec, or workspace authority.
+            let direct = extract_role_json(&content);
+            if let Some(mut payload) = direct.and_then(|value| {
+                value
+                    .get("payload")
+                    .cloned()
+                    .or_else(|| value.get("artifact").cloned())
+                    .or_else(|| value.get("applicationConcept").cloned())
+                    .or_else(|| value.get("concept").cloned())
+                    .or_else(|| value.get("dreamContract").cloned())
+                    .or(Some(value))
+            }) {
+                if prepared.role == Role::Dreamer {
+                    payload = normalize_dream_contract_payload(payload);
+                }
+                let default_type = match prepared.role {
+                    Role::Dreamer => "dream_contract",
+                    Role::Skeptic => "finding",
+                    Role::Fde => "fde_brief",
+                    Role::UxDesigner => "ux_contract",
+                    Role::Architect => "architecture_alternatives",
+                    Role::Planner => "task_graph",
+                    Role::Builder => "finding",
+                    Role::Verifier => "verification_verdict",
+                    Role::Reviewer => "review_verdict",
+                    _ => "finding",
+                };
+                if payload.get("type").is_none() {
+                    payload["type"] = json!(default_type)
+                }
+                if prepared.role == Role::Builder
+                    && payload.get("type").and_then(Value::as_str) == Some("propose_patch")
+                {
+                    let patch = payload;
+                    payload = json!({"type":"patch_proposal","operation":patch});
+                }
+                let artifact_type = payload
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or(default_type)
+                    .to_string();
                 AgentOperation::ProposeArtifact {
                     header: StudioOperationHeader {
                         operation_id: new_id("OP"),
                         initiative_id: prepared.context_capsule.initiative_id.clone(),
                         task_id: prepared.context_capsule.task_id.clone(),
-                        role: Role::Dreamer.as_str().into(),
-                        artifact_type: "dream_contract".into(),
+                        role: prepared.role.as_str().into(),
+                        artifact_type,
                         schema_version: 1,
                         spec_version: prepared.context_capsule.active_spec_version,
-                        reason: "Dreamer concept normalized into a governed Dream Contract.".into(),
-                        expected_outcome:
-                            "A durable, reversible candidate for team challenge and exploration."
+                        reason:
+                            "Direct configured-role artifact normalized into the governed protocol."
                                 .into(),
+                        expected_outcome:
+                            "A schema-validated, capsule-bound authoritative role result.".into(),
                         source_context_bundle_id: Some(prepared.context_capsule.id.clone()),
                     },
                     payload,
                 }
             } else {
                 record_context_generation_failure(conn, prepared, &error)?;
-                return Err(error);
+                return Err(format!(
+                    "{error}; bounded model output: {}",
+                    content.chars().take(2000).collect::<String>()
+                ));
             }
-        }
-        Err(error) => {
-            record_context_generation_failure(conn, prepared, &error)?;
-            return Err(error);
         }
     };
     if let Some(context_capsule) = apply_studio_operation(conn, prepared, &operation)? {
@@ -1659,6 +2034,161 @@ fn run_configured_role(
         );
     }
     serde_json::to_value(operation).map_err(|error| error.to_string())
+}
+
+fn extract_role_json(content: &str) -> Option<Value> {
+    let trimmed = content.trim();
+    if let Ok(value) = serde_json::from_str(trimmed) {
+        return Some(value);
+    }
+    let unfenced = trimmed
+        .strip_prefix("```json")
+        .or_else(|| trimmed.strip_prefix("```"))
+        .and_then(|value| value.strip_suffix("```"));
+    if let Some(value) = unfenced.and_then(|value| serde_json::from_str(value.trim()).ok()) {
+        return Some(value);
+    }
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    if end <= start {
+        return None;
+    }
+    serde_json::from_str(&trimmed[start..=end]).ok()
+}
+
+fn role_output_shape_valid(content: &str, role: Role, constructing: bool) -> bool {
+    let Some(value) = extract_role_json(content) else {
+        return false;
+    };
+    let kind = value
+        .get("artifactType")
+        .or_else(|| value.get("payload").and_then(|p| p.get("type")))
+        .or_else(|| value.get("artifact").and_then(|p| p.get("type")))
+        .or_else(|| value.get("type"))
+        .and_then(Value::as_str);
+    match role {
+        Role::Dreamer => kind.is_none() || kind == Some("dream_contract"),
+        Role::Skeptic => matches!(kind, Some("finding" | "review_verdict")),
+        Role::Fde => kind == Some("fde_brief"),
+        Role::UxDesigner => kind == Some("ux_contract"),
+        Role::Architect => matches!(kind, Some("architecture_alternatives" | "adr")),
+        Role::Planner => kind == Some("task_graph"),
+        Role::Builder => {
+            if constructing {
+                matches!(kind, Some("patch_proposal" | "propose_patch"))
+            } else {
+                kind == Some("finding")
+            }
+        }
+        Role::Verifier => kind == Some("verification_verdict"),
+        Role::Reviewer => kind == Some("review_verdict"),
+        _ => false,
+    }
+}
+
+fn role_repair_schema(role: Role) -> &'static str {
+    match role {
+        Role::Dreamer => {
+            r#"{"type":"dream_contract","title":"App name","horizon":"strategic","problemObserved":"problem","proposedFuture":"solution","supportingEvidence":[],"expectedValue":["value"],"counterarguments":["risk"],"assumptions":["assumption"],"smallestExperiment":"offline web app","estimatedCost":"bounded","reversibility":"high","noveltyRationale":"novelty","confidence":0.6}"#
+        }
+        Role::Skeptic => {
+            r#"{"type":"finding","severity":"medium","blocking":false,"summary":"challenge","recommendation":"proceed"}"#
+        }
+        Role::Fde => {
+            r#"{"type":"fde_brief","targetUser":"user","objective":"outcome","assumptions":["assumption"],"constraints":["offline"],"nonGoals":["cloud"],"successCriteria":["journey works"],"verdict":"GO"}"#
+        }
+        Role::UxDesigner => {
+            r#"{"type":"ux_contract","persona":"user","userJourney":["open","act","confirm"],"states":["empty","active","error","recovery"],"accessibility":["keyboard","visible focus"],"acceptanceCriteria":["primary journey works"]}"#
+        }
+        Role::Architect => {
+            r#"{"type":"architecture_alternatives","options":[{"id":"A","design":"modular offline web app","reversibility":"high"},{"id":"B","design":"single-page modules","reversibility":"medium"}],"selected":"A","moduleStructure":["index.html","styles.css","app.js"],"persistenceModel":"localStorage","securityModel":"offline"}"#
+        }
+        Role::Planner => {
+            r#"{"type":"task_graph","tasks":[{"id":"TASK-1","title":"Core journey","dependencies":[],"allowedPaths":["app.js"],"expectedFiles":["app.js"]},{"id":"TASK-2","title":"Visual system","dependencies":["TASK-1"],"allowedPaths":["styles.css"],"expectedFiles":["styles.css"]},{"id":"TASK-3","title":"Accessible shell","dependencies":["TASK-2"],"allowedPaths":["index.html"],"expectedFiles":["index.html"]}],"validation":["offline_web_v1 structural validation","offline_web_v1 launch check"]}"#
+        }
+        Role::Builder => {
+            r#"{"type":"finding","blocking":false,"summary":"bounded tasks are buildable","verdict":"BUILDABLE"}"#
+        }
+        Role::Verifier => {
+            r#"{"type":"verification_verdict","verdict":"PASS","missingEvidence":[],"testabilityNotes":["structural validation","launch check"]}"#
+        }
+        Role::Reviewer => r#"{"type":"review_verdict","verdict":"PASS","findings":[]}"#,
+        _ => r#"{"type":"finding","blocking":false,"summary":"stage complete"}"#,
+    }
+}
+
+fn normalize_dream_contract_payload(mut payload: Value) -> Value {
+    let first_string = |value: &Value, key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    };
+    if payload.get("title").and_then(Value::as_str).is_none() {
+        payload["title"] = json!(payload
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .or_else(|| first_string(&payload, "appNameCandidates"))
+            .unwrap_or_else(|| "Untitled Dream Application".into()));
+    }
+    let mappings = [
+        ("problemObserved", &["coreProblem", "problem"] as &[&str]),
+        (
+            "proposedFuture",
+            &["uniqueValueProposition", "proposed_future"],
+        ),
+        (
+            "smallestExperiment",
+            &["smallestCoherentProduct", "smallest_experiment"],
+        ),
+        (
+            "noveltyRationale",
+            &["noveltyRationale", "novelty_rationale"],
+        ),
+    ];
+    for (target, sources) in mappings {
+        if payload.get(target).and_then(Value::as_str).is_none() {
+            payload[target] = json!(sources
+                .iter()
+                .find_map(|source| payload.get(*source).and_then(Value::as_str))
+                .unwrap_or("Requires Product Council clarification."));
+        }
+    }
+    if payload.get("horizon").is_none() {
+        payload["horizon"] = json!("strategic");
+    }
+    if payload.get("supportingEvidence").is_none() {
+        payload["supportingEvidence"] = json!([]);
+    }
+    if payload.get("expectedValue").is_none() {
+        payload["expectedValue"] = json!([payload
+            .get("uniqueValueProposition")
+            .and_then(Value::as_str)
+            .unwrap_or("Useful offline workflow")]);
+    }
+    if payload.get("counterarguments").is_none() {
+        payload["counterarguments"] = payload
+            .get("risks")
+            .cloned()
+            .unwrap_or_else(|| json!(["Product Council validation required"]));
+    }
+    if payload.get("assumptions").is_none() {
+        payload["assumptions"] = json!(["Target users value the proposed workflow"]);
+    }
+    if payload.get("estimatedCost").is_none() {
+        payload["estimatedCost"] = json!("bounded");
+    }
+    if payload.get("reversibility").is_none() {
+        payload["reversibility"] = json!("high");
+    }
+    if payload.get("confidence").is_none() {
+        payload["confidence"] = json!(0.5);
+    }
+    payload["type"] = json!("dream_contract");
+    payload
 }
 
 fn record_context_generation_failure(
@@ -1816,6 +2346,18 @@ fn apply_studio_operation(
                 let initiative = ledger
                     .get_initiative(&header.initiative_id)
                     .map_err(|error| error.to_string())?;
+                let application_workspace: Option<String> = conn.query_row("SELECT workspace_path FROM dream_applications WHERE initiative_id=?1 AND status IN ('building','polishing')", [&header.initiative_id], |row| row.get(0)).optional().map_err(|error| error.to_string())?;
+                if let Some(application_workspace) = application_workspace {
+                    apply_builder_patch_to_application(
+                        conn,
+                        prepared,
+                        header,
+                        payload,
+                        &patch_operation,
+                        &application_workspace,
+                    )?;
+                    return Ok(None);
+                }
                 let initiative_repo = initiative.repo_root.clone();
                 let tx = conn
                     .unchecked_transaction()
@@ -2199,6 +2741,7 @@ fn materialize_authoritative_artifact(
             if tasks.is_empty() {
                 return Err("Planner task_graph requires at least one task".into());
             }
+            ledger.freeze_spec(&header.initiative_id,header.spec_version,&json!({"sourceArtifact":header.operation_id,"implementationSpec":payload,"applicationKind":"offline_web_v1"})).map_err(|error|error.to_string())?;
             let default_requirements: Vec<String> = conn
                 .prepare("SELECT id FROM requirements WHERE initiative_id=?1 AND spec_version=?2 ORDER BY id")
                 .map_err(|error| error.to_string())?
@@ -2240,17 +2783,25 @@ fn materialize_authoritative_artifact(
                     .and_then(|value| value.get("allowedPaths").and_then(Value::as_array))
                     .cloned()
                     .unwrap_or_else(|| {
-                        vec![Value::String(format!("dreams/{}", header.initiative_id))]
+                        vec![
+                            Value::String("index.html".into()),
+                            Value::String("styles.css".into()),
+                            Value::String("app.js".into()),
+                            Value::String("README.md".into()),
+                        ]
                     });
                 let expected_files = object
                     .and_then(|value| value.get("expectedFiles").and_then(Value::as_array))
                     .cloned()
                     .unwrap_or_else(|| {
-                        vec![Value::String(format!(
-                            "dreams/{}/task-{}.md",
-                            header.initiative_id,
-                            index + 1
-                        ))]
+                        vec![Value::String(
+                            match index {
+                                0 => "app.js",
+                                1 => "styles.css",
+                                _ => "index.html",
+                            }
+                            .into(),
+                        )]
                     });
                 let dependencies: Vec<String> = object
                     .and_then(|value| value.get("dependencies").and_then(Value::as_array))
@@ -2301,12 +2852,32 @@ fn materialize_authoritative_artifact(
             validate_prototype(&document).map_err(|error| error.to_string())?;
             conn.execute("INSERT INTO ux_contracts (id,initiative_id,spec_version,status,contract_json,prototype_json) VALUES (?1,?2,?3,'approved',?4,?5)", params![new_id("UX"),header.initiative_id,header.spec_version,payload.to_string(),prototype.to_string()]).map_err(|error| error.to_string())?;
         }
-        (Role::Architect, "architecture_alternatives") => {
+        (Role::Architect, "architecture_alternatives" | "adr") => {
             let selected = payload
                 .get("selected")
                 .and_then(Value::as_str)
+                .or_else(|| payload.get("selectedOption").and_then(Value::as_str))
+                .or_else(|| payload.get("decision").and_then(Value::as_str))
+                .or_else(|| payload.get("recommendation").and_then(Value::as_str))
+                .or_else(|| payload.get("preferredOption").and_then(Value::as_str))
+                .or_else(|| payload.get("chosenOption").and_then(Value::as_str))
+                .or_else(|| payload.get("selectedArchitecture").and_then(Value::as_str))
+                .or_else(|| {
+                    payload
+                        .get("adr")
+                        .and_then(|adr| adr.get("decision"))
+                        .and_then(Value::as_str)
+                })
+                .or_else(|| {
+                    payload
+                        .get("options")
+                        .and_then(Value::as_array)
+                        .and_then(|options| options.first())
+                        .and_then(|option| option.get("id"))
+                        .and_then(Value::as_str)
+                })
                 .ok_or_else(|| {
-                    "architecture alternatives requires a selected option".to_string()
+                    format!("architecture output requires a selected option or decision: {payload}")
                 })?;
             conn.execute("INSERT INTO architecture_decisions (id,initiative_id,spec_version,status,payload_json) VALUES (?1,?2,?3,'approved',?4)", params![new_id("ADR"),header.initiative_id,header.spec_version,json!({"selected":selected,"alternatives":payload.get("options").cloned().unwrap_or_else(||json!([])),"sourceArtifact":header.operation_id}).to_string()]).map_err(|error| error.to_string())?;
         }
@@ -2318,12 +2889,10 @@ fn materialize_authoritative_artifact(
 
 /// The trusted, backend-owned implementation slice used by Dream Factory.  It
 /// never touches the user's active checkout: a task can only write beneath its
-/// bound governed worktree and explicitly approved task path.  The first pass
-/// deliberately leaves a concrete acceptance marker absent; deterministic
-/// validation then creates a precise revision which is repaired on the next
-/// controller-selected attempt.  Real Builder operations use the same policy
-/// gate; this deterministic path makes the safety and recovery contract
-/// independently testable without a model endpoint.
+/// bound application workspace and explicitly approved task path. Fake Runtime
+/// deliberately introduces a forbidden remote dependency so deterministic
+/// validation produces a concrete repair. Production uses configured role
+/// invocations and never relies on fixture text as evidence.
 fn factory_build_and_review(
     conn: &rusqlite::Connection,
     factory_id: &str,
@@ -2337,20 +2906,36 @@ fn factory_build_and_review(
     if task.initiative_id != initiative_id || task.status != TaskStatus::InProgress {
         return Err("factory Builder requires the controller-selected in-progress task".into());
     }
+    let builder_config = factory_role_runtime(conn, initiative_id, Role::Builder)?;
+    if builder_config.0 != "fake" {
+        return factory_real_build_and_review(
+            conn,
+            factory_id,
+            initiative_id,
+            task_id,
+            &task,
+            builder_config,
+        );
+    }
     let worktree: String = conn
         .query_row(
-            "SELECT worktree_path FROM governed_worktrees WHERE initiative_id=?1 AND status='active'",
+            "SELECT workspace_path FROM dream_applications WHERE initiative_id=?1 AND status IN ('building','polishing') UNION ALL SELECT worktree_path FROM governed_worktrees WHERE initiative_id=?1 AND status='active' LIMIT 1",
             [initiative_id], |row| row.get(0),
         )
         .optional().map_err(|error| error.to_string())?
         .ok_or_else(|| "factory task has no active governed worktree".to_string())?;
-    let allowed = task
+    let allowed: Vec<String> = task
         .payload
         .get("allowedPaths")
         .and_then(Value::as_array)
-        .and_then(|values| values.first())
-        .and_then(Value::as_str)
-        .ok_or_else(|| "task has no mandate-approved write path".to_string())?;
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect();
+    if allowed.is_empty() {
+        return Err("task has no mandate-approved write path".into());
+    }
     let expected = task
         .payload
         .get("expectedFiles")
@@ -2359,38 +2944,46 @@ fn factory_build_and_review(
         .and_then(Value::as_str)
         .ok_or_else(|| "task has no expected output file".to_string())?;
     let normalized = expected.replace('\\', "/");
-    if !(normalized == allowed
-        || normalized.starts_with(&format!("{}/", allowed.trim_end_matches('/'))))
-        || normalized.starts_with('.')
+    if !allowed.iter().any(|allowed| {
+        normalized == *allowed
+            || normalized.starts_with(&format!("{}/", allowed.trim_end_matches('/')))
+    }) || normalized.starts_with('.')
         || normalized.contains("..")
         || normalized.contains(".git")
     {
         return Err("task output path violates mandate-bound worktree policy".into());
     }
     let target = PathBuf::from(&worktree).join(&normalized);
-    let title = task
-        .payload
-        .get("title")
-        .and_then(Value::as_str)
-        .unwrap_or("Dream task");
-    let (before, after, diff) = if task.iteration_count == 0 {
-        let content = format!("# {title}\n\nGenerated implementation for `{task_id}`.\n");
-        (String::new(), content.clone(), format!(
-            "diff --git a/{0} b/{0}\n--- /dev/null\n+++ b/{0}\n@@ -0,0 +1,3 @@\n+# {1}\n+\n+Generated implementation for `{2}`.\n", normalized, title, task_id))
+    let before = fs::read_to_string(&target).unwrap_or_default();
+    let after = if task.iteration_count == 0 && normalized == "app.js" {
+        format!("{before}\n// deterministic fixture: validation must reject remote behavior\nfetch('https://invalid.local');\n")
+    } else if task.iteration_count > 0 && normalized == "app.js" {
+        before
+            .lines()
+            .filter(|line| {
+                !line.contains("deterministic fixture")
+                    && !line.contains("fetch('https://invalid.local')")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\nlocalStorage.setItem('focus-garden-ready','true');\n"
     } else {
-        let original = fs::read_to_string(&target)
-            .map_err(|error| format!("repair input missing: {error}"))?;
-        let repaired = if original.ends_with('\n') {
-            format!("{original}Implementation verified.\n")
-        } else {
-            format!("{original}\nImplementation verified.\n")
-        };
-        let old_lines = original.lines().count();
-        let new_lines = repaired.lines().count();
-        (original.clone(), repaired.clone(), format!(
-            "diff --git a/{0} b/{0}\n--- a/{0}\n+++ b/{0}\n@@ -1,{1} +1,{2} @@\n{3}+Implementation verified.\n",
-            normalized, old_lines, new_lines, original.lines().map(|line| format!(" {line}\n")).collect::<String>()))
+        format!("{before}\n/* {task_id}: bounded application refinement */\n")
     };
+    let old_lines = before.lines().count();
+    let new_lines = after.lines().count();
+    let old_body = before
+        .lines()
+        .map(|line| format!("-{line}\n"))
+        .collect::<String>();
+    let new_body = after
+        .lines()
+        .map(|line| format!("+{line}\n"))
+        .collect::<String>();
+    let diff = format!(
+        "diff --git a/{0} b/{0}\n--- a/{0}\n+++ b/{0}\n@@ -1,{1} +1,{2} @@\n{3}{4}",
+        normalized, old_lines, new_lines, old_body, new_body
+    );
     let mut digest = Sha256::new();
     digest.update(before.as_bytes());
     let proposal = EnginePatchProposal {
@@ -2433,7 +3026,9 @@ fn factory_build_and_review(
             created_at: None,
         })
         .map_err(|error| error.to_string())?;
-    let passed = after.contains("Implementation verified.");
+    let passed = ApplicationWorkspaceManager::new(conn)
+        .validate_offline_web_app(&PathBuf::from(&worktree))
+        .is_ok();
     for requirement_id in task
         .payload
         .get("requirementIds")
@@ -2453,9 +3048,9 @@ fn factory_build_and_review(
                     provenance: "factory-deterministic-validation".into(),
                     output_ref: Some(target.display().to_string()),
                     summary: if passed {
-                        "Required implementation marker present.".into()
+                        "Offline application structural and resource validation passed.".into()
                     } else {
-                        "Required implementation marker absent; precise repair required.".into()
+                        "Offline application validation failed; precise repair required.".into()
                     },
                     content_sha256: None,
                 },
@@ -2483,7 +3078,7 @@ fn factory_build_and_review(
             redacted_summary: if passed {
                 "Verifier accepted deterministic validation.".into()
             } else {
-                "Verifier identified the missing implementation marker.".into()
+                "Verifier identified a concrete offline application validation failure.".into()
             },
             created_at: None,
         })
@@ -2512,6 +3107,264 @@ fn factory_build_and_review(
                 "targeted_builder_repair"
             }),
         )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn factory_role_runtime(
+    conn: &rusqlite::Connection,
+    initiative_id: &str,
+    role: Role,
+) -> Result<(String, String, Option<String>, i64), String> {
+    let session: String = conn
+        .query_row(
+            "SELECT session_id FROM initiatives WHERE id=?1",
+            [initiative_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    let configured=conn.query_row("SELECT runtime,model,endpoint_url,timeout_seconds FROM role_runtime_configs WHERE session_id=?1 AND role=?2",params![session,role.as_str()],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?))).optional().map_err(|error|error.to_string())?;
+    if let Some(configured) = configured {
+        return Ok(configured);
+    }
+    Ok(conn.query_row("SELECT runtime,model,endpoint_url,timeout_seconds FROM role_runtime_configs WHERE session_id=?1 AND role='dreamer'",[session],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?))).optional().map_err(|error|error.to_string())?.unwrap_or_else(||("fake".into(),"studio-fixture-v1".into(),None,300)))
+}
+
+fn invoke_factory_task_role(
+    conn: &rusqlite::Connection,
+    initiative_id: &str,
+    task_id: &str,
+    role: Role,
+    config: (String, String, Option<String>, i64),
+) -> Result<Value, String> {
+    let prepared = prepare_role_run(
+        conn,
+        initiative_id,
+        Some(task_id),
+        role,
+        &config.0,
+        &config.1,
+    )
+    .map_err(|error| error.to_string())?;
+    let lease = studio_role_scheduler()
+        .acquire(&prepared.run_id)
+        .map_err(|error| error.to_string())?;
+    let result = run_configured_role(
+        conn,
+        &prepared,
+        &config.0,
+        &config.1,
+        config.2.as_deref(),
+        config.3,
+    );
+    drop(lease);
+    match result {
+        Ok(value) => {
+            complete_role_run(
+                conn,
+                &prepared,
+                "completed",
+                "factory_stage_contract_satisfied",
+                None,
+            )
+            .map_err(|error| error.to_string())?;
+            Ok(value)
+        }
+        Err(error) => {
+            complete_role_run(
+                conn,
+                &prepared,
+                "failed",
+                "factory_role_error",
+                Some(&error),
+            )
+            .map_err(|completion| completion.to_string())?;
+            Err(error)
+        }
+    }
+}
+
+fn factory_real_build_and_review(
+    conn: &rusqlite::Connection,
+    factory_id: &str,
+    initiative_id: &str,
+    task_id: &str,
+    task: &StudioTask,
+    builder_config: (String, String, Option<String>, i64),
+) -> Result<(), String> {
+    invoke_factory_task_role(conn, initiative_id, task_id, Role::Builder, builder_config)?;
+    let workspace:String=conn.query_row("SELECT workspace_path FROM dream_applications WHERE initiative_id=?1 AND status IN ('building','polishing')",[initiative_id],|row|row.get(0)).map_err(|error|error.to_string())?;
+    let validation =
+        ApplicationWorkspaceManager::new(conn).validate_offline_web_app(&PathBuf::from(&workspace));
+    let passed_validation = validation.is_ok();
+    Ledger::new(conn)
+        .record_event(OrchestrationEvent {
+            id: new_id("EVENT"),
+            initiative_id: initiative_id.into(),
+            task_id: Some(task_id.into()),
+            actor_role: Role::System,
+            kind: if passed_validation {
+                "foundry.validation.passed"
+            } else {
+                "foundry.validation.failed"
+            }
+            .into(),
+            requirement_ids: task
+                .payload
+                .get("requirementIds")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect(),
+            adr_ids: vec![],
+            assumption_ids: vec![],
+            features: BTreeMap::new(),
+            provenance: "offline_web_v1-validator".into(),
+            redacted_summary: validation
+                .err()
+                .map(|error| error.to_string())
+                .unwrap_or_else(|| {
+                    "Offline scaffold, assets, entry point, and remote-resource policy passed."
+                        .into()
+                }),
+            created_at: None,
+        })
+        .map_err(|error| error.to_string())?;
+    conn.execute("UPDATE studio_tasks SET status='reviewing',updated_at=datetime('now') WHERE id=?1 AND status='in_progress'",[task_id]).map_err(|error|error.to_string())?;
+    invoke_factory_task_role(
+        conn,
+        initiative_id,
+        task_id,
+        Role::Verifier,
+        factory_role_runtime(conn, initiative_id, Role::Verifier)?,
+    )?;
+    invoke_factory_task_role(
+        conn,
+        initiative_id,
+        task_id,
+        Role::Reviewer,
+        factory_role_runtime(conn, initiative_id, Role::Reviewer)?,
+    )?;
+    let reviewer_payload:String=conn.query_row("SELECT payload_json FROM artifacts WHERE initiative_id=?1 AND task_id=?2 AND role='reviewer' AND artifact_type='review_verdict' ORDER BY rowid DESC LIMIT 1",params![initiative_id,task_id],|row|row.get(0)).map_err(|error|error.to_string())?;
+    let reviewer: Value =
+        serde_json::from_str(&reviewer_payload).map_err(|error| error.to_string())?;
+    let verdict = reviewer
+        .get("verdict")
+        .and_then(Value::as_str)
+        .unwrap_or("BLOCKED");
+    let routed = if !passed_validation || verdict == "REVISE" {
+        intent_ledger::ReviewerVerdict::Revise
+    } else if verdict == "PASS" {
+        intent_ledger::ReviewerVerdict::Pass
+    } else if verdict == "REPLAN" {
+        intent_ledger::ReviewerVerdict::Replan
+    } else {
+        intent_ledger::ReviewerVerdict::Blocked
+    };
+    Ledger::new(conn)
+        .route_review_verdict(task_id, routed)
+        .map_err(|error| error.to_string())?;
+    let next = match routed {
+        intent_ledger::ReviewerVerdict::Pass => dream_factory::FactoryStage::TaskSelection,
+        intent_ledger::ReviewerVerdict::Revise => dream_factory::FactoryStage::TaskRevising,
+        intent_ledger::ReviewerVerdict::Replan => dream_factory::FactoryStage::InitiativeReplanning,
+        intent_ledger::ReviewerVerdict::Blocked => dream_factory::FactoryStage::Blocked,
+    };
+    DreamFactoryController::new(conn)
+        .set_stage(
+            factory_id,
+            dream_factory::FactoryStage::TaskBuildPending,
+            next,
+            Some(if routed == intent_ledger::ReviewerVerdict::Pass {
+                "ready_task"
+            } else {
+                "role_findings"
+            }),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn apply_builder_patch_to_application(
+    conn: &rusqlite::Connection,
+    prepared: &orchestration_core::PreparedRoleRun,
+    header: &StudioOperationHeader,
+    payload: &Value,
+    operation: &AgentOperation,
+    workspace: &str,
+) -> Result<(), String> {
+    let (proposal_id, base_commit, current_commit, files) = match operation {
+        AgentOperation::ProposePatch {
+            proposal_id,
+            base_commit,
+            current_commit,
+            files,
+            ..
+        } => (proposal_id, base_commit, current_commit, files),
+        _ => return Err("application Builder requires a typed propose_patch operation".into()),
+    };
+    let proposal = EnginePatchProposal {
+        id: proposal_id.clone(),
+        base_commit: base_commit.clone(),
+        current_commit: current_commit.clone(),
+        files: files
+            .iter()
+            .map(|file| EnginePatchFile {
+                id: file.id.clone(),
+                path: file.path.clone(),
+                before_sha256: file.before_sha256.clone(),
+                unified_diff: file.patch.clone(),
+            })
+            .collect(),
+    };
+    let applied = apply_patch_proposal_transactional(&PathBuf::from(workspace), &proposal, None)
+        .map_err(|error| {
+            format!("MandateBoundApplicationWorkspaceApproval rejected patch: {error}")
+        })?;
+    let ledger = Ledger::new(conn);
+    ledger
+        .publish_artifact(
+            &ArtifactEnvelope {
+                operation_id: header.operation_id.clone(),
+                initiative_id: header.initiative_id.clone(),
+                task_id: header.task_id.clone(),
+                role: Role::Builder,
+                artifact_type: "patch_proposal".into(),
+                schema_version: header.schema_version,
+                spec_version: header.spec_version,
+                source_context_bundle_id: header.source_context_bundle_id.clone(),
+                reason: header.reason.clone(),
+                expected_outcome: header.expected_outcome.clone(),
+                payload: payload.clone(),
+            },
+            Some(&prepared.run_id),
+            "Configured Builder patch applied to the bound standalone application workspace.",
+        )
+        .map_err(|error| error.to_string())?;
+    ledger
+        .record_event(OrchestrationEvent {
+            id: new_id("EVENT"),
+            initiative_id: header.initiative_id.clone(),
+            task_id: header.task_id.clone(),
+            actor_role: Role::System,
+            kind: "foundry.application_patch.applied".into(),
+            requirement_ids: vec![],
+            adr_ids: vec![],
+            assumption_ids: vec![],
+            features: BTreeMap::from([(
+                "changed_files".into(),
+                applied.applied_files.len() as f64,
+            )]),
+            provenance: "MandateBoundApplicationWorkspaceApproval".into(),
+            redacted_summary: format!(
+                "Applied {} Builder file(s) in application workspace; rollback checkpoint {}.",
+                applied.applied_files.len(),
+                applied.checkpoint_id
+            ),
+            created_at: None,
+        })
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -2612,6 +3465,85 @@ mod tests {
         let unknown =
             valid_belief().replace("\"payload\":", "\"unknownAuthority\":true,\"payload\":");
         assert!(strict_parse_studio_operation(&unknown).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires local Ollama qwen3-coder:latest and can take several minutes"]
+    fn qwen_product_council_smoke_invokes_every_role() {
+        let root = std::env::temp_dir().join(new_id("qwen-council"));
+        std::fs::create_dir_all(&root).unwrap();
+        let repo = root.canonicalize().unwrap().to_string_lossy().to_string();
+        let session = "qwen-council-smoke";
+        let mandate = Mandate {
+            id: "MANDATE-QWEN".into(),
+            name: "Qwen App Foundry".into(),
+            purpose: "Build a bounded standalone offline application".into(),
+            allowed_modes: vec![
+                InitiativeMode::DreamIdeation,
+                InitiativeMode::DreamPrototype,
+                InitiativeMode::DreamIncubator,
+            ],
+            allowed_repo_paths: vec![],
+            maximum_candidates_per_cycle: 3,
+            maximum_prototypes_per_cycle: 2,
+            maximum_builder_iterations: 3,
+            maximum_changed_files: 20,
+            maximum_elapsed_minutes: 60,
+            network_policy: "disabled".into(),
+            package_install_policy: "forbidden".into(),
+            active_branch_write_policy: "forbidden".into(),
+            merge_authority: "human_only".into(),
+            enabled: true,
+        };
+        dream_save_mandate(MandateRequest {
+            session_id: session.into(),
+            repo_root: repo.clone(),
+            mandate,
+        })
+        .unwrap();
+        studio_save_role_runtime(RoleRuntimeConfigRequest {
+            session_id: session.into(),
+            repo_root: repo.clone(),
+            role: "dreamer".into(),
+            runtime: "local-server".into(),
+            model: "qwen3-coder:latest".into(),
+            endpoint_url: Some("http://127.0.0.1:11434/v1".into()),
+            timeout_seconds: 600,
+            context_window_tokens: 262_144,
+            maximum_output_tokens: 4_096,
+            token_estimation_method: "conservative_utf8_bytes_div3".into(),
+            safety_margin_tokens: 2_048,
+            structured_output_behavior: "json_object".into(),
+            capability_source: "local-ollama-smoke".into(),
+        })
+        .unwrap();
+        let output = dream_start_cycle(DreamCycleRequest {
+            session_id: session.into(),
+            repo_root: repo.clone(),
+            mandate_id: "MANDATE-QWEN".into(),
+            focus: String::new(),
+        })
+        .unwrap();
+        let initiative = output["initiative"]["id"].as_str().unwrap();
+        let conn = init_audit(&PathBuf::from(&repo), session).unwrap();
+        for role in [
+            "dreamer",
+            "skeptic",
+            "fde",
+            "ux_designer",
+            "architect",
+            "planner",
+            "builder",
+            "verifier",
+            "reviewer",
+        ] {
+            let count:i64=conn.query_row("SELECT COUNT(*) FROM agent_runs WHERE initiative_id=?1 AND role=?2 AND status='completed'",params![initiative,role],|row|row.get(0)).unwrap();
+            assert!(count >= 1, "missing completed {role} invocation");
+        }
+        let dreamer_runs:i64=conn.query_row("SELECT COUNT(*) FROM agent_runs WHERE initiative_id=?1 AND role='dreamer' AND status='completed'",[initiative],|row|row.get(0)).unwrap();
+        assert!(dreamer_runs >= 2, "Dreamer synthesis round did not run");
+        drop(conn);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
@@ -2736,10 +3668,17 @@ mod tests {
             mandate,
         })
         .unwrap();
+        let output_root = std::env::temp_dir().join(new_id("dream-output"));
+        let output_root_id = ApplicationWorkspaceManager::new(
+            &init_audit(&PathBuf::from(&repo), "factory-e2e").unwrap(),
+        )
+        .approve_output_root("factory-e2e", &output_root)
+        .unwrap();
         dream_factory_start(DreamFactoryRequest {
             session_id: "factory-e2e".into(),
             repo_root: repo.clone(),
             mandate_id: "MANDATE-E2E".into(),
+            output_root_id,
         })
         .unwrap();
         let request = DreamFactoryTickRequest {
@@ -2790,14 +3729,20 @@ mod tests {
             passed >= 2,
             "DREAM-A must have two dependency-linked passed tasks"
         );
-        let worktrees: i64 = conn
+        let application_path: String = conn
             .query_row(
-                "SELECT COUNT(*) FROM governed_worktrees WHERE status='active'",
+                "SELECT workspace_path FROM dream_applications ORDER BY rowid LIMIT 1",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(worktrees >= 1);
+        assert!(PathBuf::from(&application_path)
+            .join("index.html")
+            .is_file());
+        assert!(PathBuf::from(&application_path).join("app.js").is_file());
+        ApplicationWorkspaceManager::new(&conn)
+            .validate_offline_web_app(&PathBuf::from(&application_path))
+            .unwrap();
         let current_head = Command::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(&root)
@@ -2810,6 +3755,7 @@ mod tests {
         );
         drop(conn);
         let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(output_root);
     }
 
     #[test]

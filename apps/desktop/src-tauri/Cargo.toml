@@ -22,6 +22,7 @@ context-os = { path = "../../../crates/context-os" }
 pulse-engine = { path = "../../../crates/pulse-engine" }
 worktree-manager = { path = "../../../crates/worktree-manager" }
 dream-factory = { path = "../../../crates/dream-factory" }
+app-foundry = { path = "../../../crates/app-foundry" }
 rusqlite = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }

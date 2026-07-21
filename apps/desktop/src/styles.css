@@ -177,6 +177,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .dream-autoprompt { display:flex; flex-direction:column; gap:3px; min-height:54px; justify-content:center; padding:8px 10px; border:1px solid #354258; border-radius:8px; background:#0b111b; color:#dce9f7; }
 .dream-autoprompt span { color:#91a6bd; font-size:11px; }
 .dream-factory-controls { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.dream-output-root { display:grid; gap:4px; min-width:min(34rem, 100%); color:#b7c5d8; font-size:11px; }
+.dream-output-root input { box-sizing:border-box; width:100%; border:1px solid #354258; border-radius:8px; background:#0b111b; color:#e8eef7; padding:8px; }
 .dream-factory-controls .small { flex-basis:100%; }
 .dream-continuous input { width:auto; }
 .studio-notice { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:9px 0; padding:9px 11px; border:1px solid #3e536f; border-radius:8px; background:#132033; }
