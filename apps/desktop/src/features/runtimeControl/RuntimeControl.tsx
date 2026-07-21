@@ -31,7 +31,10 @@ export function RuntimeControl(props: { settings: RuntimeSettings; onChange: (se
   const [approvalStatus, setApprovalStatus] = useState<EndpointApprovalStatus | null>(null);
   const endpointClass = useMemo(() => classifyEndpoint(props.settings.endpointUrl), [props.settings.endpointUrl]);
 
-  function providerForBackend() { return props.settings.provider === 'fake' ? 'fake' : 'local-server'; }
+  function providerForBackend() {
+    if (props.settings.provider === 'managed-llamacpp') return 'local-server';
+    return props.settings.provider;
+  }
 
   async function refresh() {
     setStatus(await invoke<RuntimeStatusView>('runtime_status'));
@@ -101,7 +104,12 @@ export function RuntimeControl(props: { settings: RuntimeSettings; onChange: (se
   }
 
   function applyPreset(preset: RuntimePresetView) {
-    update({ provider: 'local-server', endpointUrl: preset.default_url, remoteConfirmed: false });
+    const presetProvider: RuntimeSettings['provider'] = preset.id === 'cloud-openai'
+      ? 'cloud-openai'
+      : preset.id === 'cloud-anthropic'
+        ? 'cloud-anthropic'
+        : 'local-server';
+    update({ provider: presetProvider, endpointUrl: preset.default_url, remoteConfirmed: false });
     setMessage(`${preset.label}: ${preset.notes}`);
   }
 
@@ -118,19 +126,30 @@ export function RuntimeControl(props: { settings: RuntimeSettings; onChange: (se
   return (
     <div className="panel runtime-panel">
       <div className="panel-heading-row"><h3>Local Model Runtime Control</h3><button onClick={refresh}>Refresh</button></div>
-      <div className="notice ok"><strong>Local-first model setup</strong><div className="small">Synthesize is intended for self-hosted open-source coding models. “OpenAI-compatible” below means local HTTP wire protocol, not OpenAI cloud.</div></div>
+      <div className="notice ok"><strong>Hybrid runtime lanes</strong><div className="small">Use Qwen3 local lanes for routine coding and route only hard tasks to cloud-heavy models. Endpoint approval still governs non-local context egress.</div></div>
 
       <label className="small">Runtime mode</label>
       <select value={props.settings.provider} onChange={(e) => update({ provider: e.target.value as RuntimeSettings['provider'] })}>
         <option value="fake">Fake runtime</option>
         <option value="local-server">Local model server</option>
         <option value="managed-llamacpp">Managed llama.cpp</option>
+        <option value="cloud-openai">OpenAI cloud</option>
+        <option value="cloud-anthropic">Anthropic cloud</option>
       </select>
       <label className="small">Local server URL</label>
-      <input value={props.settings.endpointUrl} onChange={(e) => update({ endpointUrl: e.target.value, remoteConfirmed: false })} placeholder="http://localhost:8080/v1" />
+      <input value={props.settings.endpointUrl} onChange={(e) => update({ endpointUrl: e.target.value, remoteConfirmed: false })} placeholder="http://localhost:11434/v1" />
       <label className="small">Model name</label>
-      <input value={props.settings.modelName} onChange={(e) => update({ modelName: e.target.value })} placeholder="qwen2.5-coder" />
-      <div className="small">Protocol: {props.settings.provider === 'fake' ? 'in-process fixture' : props.settings.provider === 'managed-llamacpp' ? 'managed llama.cpp served over local HTTP' : 'OpenAI-compatible local HTTP'}</div>
+      <input value={props.settings.modelName} onChange={(e) => update({ modelName: e.target.value })} placeholder="qwen3-coder:latest" />
+      <details open><summary>Context capability declaration</summary>
+        <label className="small">Model context window tokens</label><input type="number" min={512} value={props.settings.contextWindowTokens} onChange={(e) => update({ contextWindowTokens: Number(e.target.value) })} />
+        <label className="small">Reserved / maximum output tokens</label><input type="number" min={1} value={props.settings.maximumOutputTokens} onChange={(e) => update({ maximumOutputTokens: Number(e.target.value) })} />
+        <label className="small">Safety margin tokens</label><input type="number" min={1} value={props.settings.safetyMarginTokens} onChange={(e) => update({ safetyMarginTokens: Number(e.target.value) })} />
+        <label className="small">Token accounting</label><select value={props.settings.tokenEstimationMethod} onChange={() => update({ tokenEstimationMethod: 'conservative_utf8_bytes_div3' })}><option value="conservative_utf8_bytes_div3">Conservative estimate (UTF-8 bytes / 3)</option></select>
+        <label className="small">Structured output behavior</label><select value={props.settings.structuredOutputBehavior} onChange={(e) => update({ structuredOutputBehavior: e.target.value as RuntimeSettings['structuredOutputBehavior'] })}><option value="json_schema">JSON schema</option><option value="json_object">JSON object</option><option value="prompt_only">Prompt only</option></select>
+        <label className="small">Capability source</label><input value={props.settings.capabilitySource} onChange={(e) => update({ capabilitySource: e.target.value })} />
+        <div className="small">Synthesize rejects inference unless compiled input + reserved output + safety margin fits this declared window. Character counts are never labeled as tokens.</div>
+      </details>
+      <div className="small">Protocol: {props.settings.provider === 'fake' ? 'in-process fixture' : props.settings.provider === 'managed-llamacpp' ? 'managed llama.cpp served over local HTTP' : props.settings.provider === 'cloud-openai' ? 'OpenAI REST API' : props.settings.provider === 'cloud-anthropic' ? 'Anthropic Messages API' : 'OpenAI-compatible local HTTP'}</div>
       <div className="small">Endpoint classification: {endpointClass}</div>
       <div className="small">Backend repo-context approval: {endpointClass === 'local' ? 'not required for localhost' : approvalStatus?.approved ? `approved at ${approvalStatus.approved_at}` : 'not approved'}</div>
       {props.settings.provider !== 'fake' && endpointClass !== 'local' && (
@@ -149,7 +168,7 @@ export function RuntimeControl(props: { settings: RuntimeSettings; onChange: (se
 
       <details><summary>Recommended local coding model classes</summary>{models.map((model) => <div className="model-card" key={model.id}><strong>{model.name}</strong><div className="small">{model.runtime} · {model.format} · approximate RAM {model.recommended_ram_gb}GB</div><div className="small">{model.notes}</div></div>)}</details>
       {message && <div className="small">{message}</div>}
-      <div className="small">Model downloads are not automated in this build. Download GGUF models manually, import them here, or connect a self-hosted local model server.</div>
+      <div className="small">No-Ollama bootstrap: run scripts\bootstrap-local-model.ps1, then scripts\start-local-model.ps1, and use Managed llama.cpp or the localhost preset.</div>
     </div>
   );
 }

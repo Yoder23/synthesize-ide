@@ -18,6 +18,7 @@ if [ ! -f pnpm-lock.yaml ] || grep -q "Synthesize IDE lockfile note" pnpm-lock.y
   pnpm install --lockfile-only
 fi
 
+cargo fmt --all -- --check
 cargo check --workspace
 cargo test --workspace
 pnpm install --frozen-lockfile

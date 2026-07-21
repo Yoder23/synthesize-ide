@@ -51,8 +51,15 @@ pub struct LlamaCppRuntime {
 }
 
 impl RuntimeAdapter for LlamaCppRuntime {
-    fn id(&self) -> &str { "llamacpp" }
+    fn id(&self) -> &str {
+        "llamacpp"
+    }
     fn health(&self) -> RuntimeHealth {
-        RuntimeHealth { status: RuntimeStatus::Stopped, message: Some("supervisor not implemented yet".into()), pid: None, endpoint: Some(self.endpoint.clone()) }
+        RuntimeHealth {
+            status: RuntimeStatus::Stopped,
+            message: Some("supervisor not implemented yet".into()),
+            pid: None,
+            endpoint: Some(self.endpoint.clone()),
+        }
     }
 }

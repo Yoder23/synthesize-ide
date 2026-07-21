@@ -36,7 +36,7 @@ export function DiffQueue(props: {
         const source = props.proposalSourceByProposal[patch.proposalId];
         const sourceAgentProfileId = source?.agentProfileId ?? props.agentProfileId;
         const hasPersistedContext = !!source?.contextBundleId;
-        const canValidateProfile = hasPersistedContext && (sourceAgentProfileId === 'local-patcher' || sourceAgentProfileId === 'fake-demo');
+        const canValidateProfile = hasPersistedContext && (sourceAgentProfileId === 'local-patcher' || sourceAgentProfileId === 'fake-demo' || sourceAgentProfileId === 'moa-action-planner');
         const canApply = isApproved && !isApplied && !isRolledBack && !props.isDirty;
         const canRollback = isApplied && !isRolledBack && !props.isDirty;
         return (

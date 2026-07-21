@@ -15,8 +15,22 @@ type AgentOperation =
   | ProposePatchOperation
   | RequestCommandOperation
   | AskUserOperation
-  | FinalReportOperation;
+  | FinalReportOperation
+  | ProposeArtifactOperation
+  | PublishBeliefOperation
+  | AskAgentOperation
+  | AnswerAgentOperation
+  | ReportFindingOperation
+  | RequestTransitionOperation
+  | RequestContextOperation
+  | StudioFinalReportOperation;
 ```
+
+Studio operations share a required header: `operationId`, `initiativeId`, optional `taskId`, `role`, `artifactType`, `schemaVersion`, `specVersion`, optional `sourceContextBundleId`, `reason`, and `expectedOutcome`. Unknown fields, stale spec versions, mismatched tasks/contexts, duplicate operation IDs, oversized payloads, and role-forbidden artifact types are rejected by the backend.
+
+Structured communication is explicit: roles publish artifacts and beliefs or ask an addressed role a question. A question records its reason, blocking status, and eventual answer. Agents can request a lifecycle transition; they cannot perform it. Studio final reports are proof artifacts, not permission to merge.
+
+Builder patch proposals remain proposals. Their proof link records task/spec/requirement/ADR/context bindings and a canonical SHA-256 operation hash before any governed patch lifecycle can proceed.
 
 ## Command operations use argv
 

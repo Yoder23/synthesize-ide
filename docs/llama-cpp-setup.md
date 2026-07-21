@@ -18,15 +18,25 @@ Then configure Synthesize:
 
 ## Managed llama.cpp
 
-Synthesize can start a user-provided llama.cpp server binary:
+Synthesize can start a local llama.cpp server binary:
 
-1. Import/select a local `.gguf` coding model.
-2. Enter the path to the llama.cpp server binary.
+1. Bootstrap or import a local `.gguf` coding model.
+2. Bootstrap or enter the path to the llama.cpp server binary.
 3. Enter port and context size.
 4. Click **Start managed llama.cpp**.
 5. Run the backend health check.
 
-Synthesize starts the process via argv-only process APIs and binds to `127.0.0.1` by default. Synthesize does not download or build llama.cpp in v11.
+Synthesize starts the process via argv-only process APIs and binds to `127.0.0.1` by default.
+
+For a no-Ollama bootstrap:
+
+```powershell
+./scripts/bootstrap-local-model.ps1 -Model smoke
+./scripts/start-local-model.ps1
+./scripts/local-model-smoke.ps1
+```
+
+Use `-Model coder-1.5b` for a stronger local coding model once the smoke path works.
 
 
 ## v11.1 release-candidate notes

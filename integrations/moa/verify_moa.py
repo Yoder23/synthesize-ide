@@ -43,11 +43,11 @@ from moa.backends.mock import MockBackend
 
 def _ok(label: str, msg: str = "") -> None:
     detail = f"  {msg}" if msg else ""
-    print(f"  [{label:<9}] ✓{detail}")
+    print(f"  [{label:<9}] OK{detail}")
 
 
 def _fail(label: str, msg: str) -> None:
-    print(f"  [{label:<9}] ✗  {msg}", file=sys.stderr)
+    print(f"  [{label:<9}] FAIL  {msg}", file=sys.stderr)
     sys.exit(1)
 
 

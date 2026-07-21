@@ -22,9 +22,19 @@ impl Default for FilePolicy {
     fn default() -> Self {
         Self {
             denied_basenames: vec![
-                ".env".into(), ".npmrc".into(), ".pypirc".into(), "id_rsa".into(), "id_ed25519".into(),
+                ".env".into(),
+                ".npmrc".into(),
+                ".pypirc".into(),
+                "id_rsa".into(),
+                "id_ed25519".into(),
             ],
-            denied_contains: vec![".ssh".into(), ".aws".into(), ".gnupg".into(), "credentials".into(), "private_key".into()],
+            denied_contains: vec![
+                ".ssh".into(),
+                ".aws".into(),
+                ".gnupg".into(),
+                "credentials".into(),
+                "private_key".into(),
+            ],
             allow_hidden_files: false,
         }
     }
@@ -41,10 +51,17 @@ impl RepoGuard {
     pub fn new(root: impl AsRef<Path>, policy: FilePolicy) -> Result<Self, RepoGuardError> {
         let root = root.as_ref().to_path_buf();
         let canonical_root = root.canonicalize()?;
-        Ok(Self { root, canonical_root, policy })
+        Ok(Self {
+            root,
+            canonical_root,
+            policy,
+        })
     }
 
-    pub fn resolve_for_existing_path(&self, candidate: impl AsRef<Path>) -> Result<PathBuf, RepoGuardError> {
+    pub fn resolve_for_existing_path(
+        &self,
+        candidate: impl AsRef<Path>,
+    ) -> Result<PathBuf, RepoGuardError> {
         let joined = self.root.join(candidate.as_ref());
         let canonical = joined.canonicalize()?;
         self.assert_inside(&canonical)?;
@@ -52,7 +69,10 @@ impl RepoGuard {
         Ok(canonical)
     }
 
-    pub fn resolve_for_write_path(&self, candidate: impl AsRef<Path>) -> Result<PathBuf, RepoGuardError> {
+    pub fn resolve_for_write_path(
+        &self,
+        candidate: impl AsRef<Path>,
+    ) -> Result<PathBuf, RepoGuardError> {
         let candidate = candidate.as_ref();
         self.assert_relative_safe(candidate)?;
 
@@ -72,9 +92,13 @@ impl RepoGuard {
         let mut existing_ancestor = joined.as_path();
         let mut missing_components: Vec<PathBuf> = Vec::new();
         while !existing_ancestor.exists() {
-            let name = existing_ancestor.file_name().ok_or(RepoGuardError::OutsideRepo)?;
+            let name = existing_ancestor
+                .file_name()
+                .ok_or(RepoGuardError::OutsideRepo)?;
             missing_components.push(PathBuf::from(name));
-            existing_ancestor = existing_ancestor.parent().ok_or(RepoGuardError::OutsideRepo)?;
+            existing_ancestor = existing_ancestor
+                .parent()
+                .ok_or(RepoGuardError::OutsideRepo)?;
         }
         let canonical_ancestor = existing_ancestor.canonicalize()?;
         self.assert_inside(&canonical_ancestor)?;
@@ -94,7 +118,9 @@ impl RepoGuard {
             match component {
                 std::path::Component::Normal(_) => {}
                 std::path::Component::CurDir => {}
-                std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                std::path::Component::ParentDir
+                | std::path::Component::RootDir
+                | std::path::Component::Prefix(_) => {
                     return Err(RepoGuardError::OutsideRepo);
                 }
             }
@@ -127,7 +153,9 @@ impl RepoGuard {
         }
         let policy_path = path.strip_prefix(&self.canonical_root).unwrap_or(path);
         for component in policy_path.components() {
-            let Some(name) = component.as_os_str().to_str() else { continue; };
+            let Some(name) = component.as_os_str().to_str() else {
+                continue;
+            };
             for deny in &self.policy.denied_basenames {
                 if name.eq_ignore_ascii_case(deny) {
                     return Err(RepoGuardError::Denied(deny.clone()));
@@ -161,7 +189,9 @@ mod tests {
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).unwrap();
         let guard = RepoGuard::new(&tmp, FilePolicy::default()).unwrap();
-        let resolved = guard.resolve_for_write_path("src/generated/deep/new_file.ts").unwrap();
+        let resolved = guard
+            .resolve_for_write_path("src/generated/deep/new_file.ts")
+            .unwrap();
         assert!(resolved.ends_with("src/generated/deep/new_file.ts"));
         assert!(resolved.starts_with(tmp.canonicalize().unwrap()));
     }

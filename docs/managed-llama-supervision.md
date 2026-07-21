@@ -4,8 +4,8 @@ Synthesize includes a minimal managed llama.cpp supervisor.
 
 ## What it does
 
-- Starts a user-supplied `llama-server` binary with argv-only process spawning.
-- Uses a user-supplied `.gguf` model path.
+- Starts a local `llama-server` binary with argv-only process spawning.
+- Uses a local `.gguf` model path.
 - Binds to `127.0.0.1` by default.
 - Tracks process status in memory.
 - Calls `try_wait()` in status checks so exited processes are detected.
@@ -14,8 +14,9 @@ Synthesize includes a minimal managed llama.cpp supervisor.
 
 ## What it does not do
 
-- It does not download or build llama.cpp.
-- It does not bundle a llama.cpp binary.
+- It does not require Ollama or a Python model runtime.
+- The bootstrap script can download a llama.cpp release binary and GGUF model into `.synthesize-runtime/`.
+- The desktop supervisor itself still starts only an already-present local binary/model path.
 - It does not provide OS-level sandboxing.
 - It does not persist process state across app restarts.
 - It does not expose arbitrary shell arguments in the default UI.

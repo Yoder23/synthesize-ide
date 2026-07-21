@@ -4,6 +4,13 @@ import type { ContextBundleView, RepoState, RuntimeSettings } from '../../app/Ap
 export function ContextVisibility(props: { repo: RepoState | null; currentContent: string; isDirty: boolean; runtimeSettings: RuntimeSettings; contextBundle: ContextBundleView | null }) {
   const endpointClass = classifyEndpoint(props.runtimeSettings.endpointUrl);
   const visibleFiles = props.repo?.files.filter((f) => !f.denied).slice(0, 40) ?? [];
+  const destinationLabel = props.runtimeSettings.provider === 'fake'
+    ? 'in-memory fake runtime'
+    : props.runtimeSettings.provider === 'cloud-openai'
+      ? `${endpointClass} OpenAI cloud endpoint`
+      : props.runtimeSettings.provider === 'cloud-anthropic'
+        ? `${endpointClass} Anthropic cloud endpoint`
+        : `${endpointClass} local model server`;
   return (
     <div className="panel">
       <h3>Context Sent to Model</h3>
@@ -14,11 +21,14 @@ export function ContextVisibility(props: { repo: RepoState | null; currentConten
           <strong>Exact persisted context bundle</strong>
           <div className="small">Bundle ID: <code>{props.contextBundle.context_bundle_id}</code></div>
           <div className="small">Source agent profile: <code>{props.contextBundle.agent_profile_id}</code></div>
-          <div className="small">Destination: {props.runtimeSettings.provider === 'fake' ? 'in-memory fake runtime' : `${props.contextBundle.endpoint_classification} local model server`}</div>
+          <div className="small">Destination: {destinationLabel}</div>
           <div className="small">Repo context leaves machine: {props.contextBundle.endpoint_classification === 'local' ? 'No remote endpoint selected by Synthesize' : 'Yes, if this endpoint is reachable off-machine'}</div>
           <div className="small">Warning: {props.contextBundle.destination_warning}</div>
           <div className="small">Selected file: <code>{props.contextBundle.selected_file_path}</code></div>
-          <div className="small">Approx context size: {props.contextBundle.char_estimate} characters</div>
+          <div className="small">Model window: {props.contextBundle.model_context_window_tokens} tokens</div>
+          <div className="small">Compiled input: {props.contextBundle.compiled_input_tokens} {props.contextBundle.token_count_kind} tokens via {props.contextBundle.token_estimation_method}</div>
+          <div className="small">Reserved output: {props.contextBundle.reserved_output_tokens} tokens · safety margin: {props.contextBundle.safety_margin_tokens} tokens · remaining: {props.contextBundle.remaining_capacity_tokens} tokens</div>
+          <div className="small">Exact message size: {props.contextBundle.char_estimate} characters (character metadata, not token count)</div>
           <div className="small">Prompt/messages hash: <code>{props.contextBundle.messages_sha256}</code></div>
           <div className="small">Context precision: {props.contextBundle.exact_context ? 'This is the exact persisted context used by backend runtime_generate.' : 'Preview only / approximate.'}</div>
           <div className="small">Current commit: {props.contextBundle.git_commit ?? 'none / non-git repo'}</div>
@@ -29,6 +39,9 @@ export function ContextVisibility(props: { repo: RepoState | null; currentConten
               <div className="small" key={`${item.kind}-${idx}`}>{item.kind}: {item.path ?? 'metadata'} · {item.chars} chars · {item.note}</div>
             ))}
           </details>
+          <details><summary>Omitted items</summary>{props.contextBundle.omitted.length === 0 ? <div className="small">None.</div> : props.contextBundle.omitted.map((item, idx) => <div className="small" key={`${item.kind}-${idx}`}>{item.kind}: {item.path ?? 'metadata'} · {item.reason}</div>)}</details>
+          <details><summary>Summaries used</summary><pre>{JSON.stringify(props.contextBundle.summaries_used, null, 2)}</pre></details>
+          <details><summary>Truncation records</summary>{props.contextBundle.truncations.length === 0 ? <div className="small">None.</div> : props.contextBundle.truncations.map((item, idx) => <div className="small" key={`${item.kind}-${idx}`}>{item.kind}: {item.included_chars}/{item.original_chars} characters · {item.reason}</div>)}</details>
           <details>
             <summary>Exact messages sent to runtime</summary>
             <div className="notice"><strong>Local persistence notice</strong><div className="small">Exact messages may include repo code and user prompt text. Synthesize stores this context bundle locally in the repo .synthesize database until you clear session data.</div></div>
@@ -38,7 +51,7 @@ export function ContextVisibility(props: { repo: RepoState | null; currentConten
       ) : (
         <div className="diffitem">
           <strong>Preview only — no context bundle has been sent yet</strong>
-          <div className="small">Destination: {props.runtimeSettings.provider === 'fake' ? 'in-memory fake runtime' : `${endpointClass} local model server`}</div>
+          <div className="small">Destination: {destinationLabel}</div>
           {props.runtimeSettings.provider !== 'fake' && endpointClass !== 'local' && <div className="small error-text">Non-local model server warning: repo context may leave this machine and backend approval is required.</div>}
           <div className="small">Selected file: <code>{props.repo.currentFilePath}</code></div>
           <div className="small">Current file lines: {props.currentContent.split('\n').length}</div>

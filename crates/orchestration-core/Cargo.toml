@@ -1,0 +1,15 @@
+[package]
+name = "orchestration-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+audit-log = { path = "../audit-log" }
+intent-ledger = { path = "../intent-ledger" }
+context-os = { path = "../context-os" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true

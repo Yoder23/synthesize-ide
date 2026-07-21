@@ -1,0 +1,290 @@
+# Mandatory Addendum: Context Operating System
+
+Add a dedicated, backend-owned Context Operating System to the current implementation. Do not treat this as optional polishing.
+
+## Core rule
+
+The model context window is temporary working memory. Durable project state lives in structured backend-owned artifacts and evidence records.
+
+Never build a multi-agent request by concatenating the complete conversation histories of the initiative or its roles.
+
+Every model invocation must receive a newly compiled, bounded, role-specific Context Capsule.
+
+## Runtime capability registry
+
+Persist and validate, per configured model/runtime:
+
+* declared context-window tokens;
+* maximum output tokens;
+* tokenizer or token-estimation method;
+* safety-margin tokens;
+* supported structured-output behavior;
+* capability source and last validation time.
+
+Do not confuse characters with tokens.
+
+Replace any use of character count stored as `token_estimate` with:
+
+* actual token count when the runtime tokenizer is available;
+* otherwise a clearly labeled conservative estimate.
+
+Never label a character count as a token count.
+
+Before inference, enforce:
+
+```text
+compiled_input_tokens
++ reserved_output_tokens
++ safety_margin_tokens
+<= model_context_window_tokens
+```
+
+Reject the request before runtime generation when this condition is not satisfied.
+
+Do not depend on runtime-side silent truncation.
+
+## Context Capsule
+
+Persist each capsule with:
+
+* capsule ID;
+* initiative ID;
+* task ID;
+* role;
+* agent-run ID;
+* active spec version;
+* active ADR versions;
+* model/runtime;
+* model context window;
+* reserved output;
+* safety margin;
+* exact or estimated token count;
+* estimation method;
+* included artifacts;
+* omitted artifacts;
+* summarized artifacts;
+* truncation records;
+* source hashes;
+* exact messages;
+* messages hash;
+* creation timestamp.
+
+The existing exact-context visibility and backend-owned runtime-call invariant must remain intact.
+
+## Priority classes
+
+Support:
+
+* `P0_PROTOCOL`
+* `P1_REQUIRED`
+* `P2_WORKING`
+* `P3_SUPPORTING`
+* `P4_BACKGROUND`
+
+`P0_PROTOCOL` and mandatory `P1_REQUIRED` items may not be silently truncated or omitted.
+
+When mandatory material cannot fit:
+
+1. partition the task;
+2. request a narrower specification;
+3. request a context refresh;
+4. or transition the task to `BLOCKED_CONTEXT_OVERFLOW`.
+
+Do not continue with an incomplete mandatory contract.
+
+## Role-specific projections
+
+Create explicit projection policies for:
+
+* Dreamer;
+* FDE;
+* UX;
+* Skeptic;
+* Architect;
+* Planner;
+* Builder;
+* Verifier;
+* Reviewer.
+
+Each policy must define:
+
+* mandatory artifact types;
+* optional artifact types;
+* forbidden or unnecessary context types;
+* repository retrieval strategy;
+* evidence selection;
+* recency behavior;
+* maximum allocation by context category.
+
+The Builder must normally receive one bounded task rather than the complete initiative.
+
+The Verifier must derive its validation plan independently and must not receive unnecessary Builder narrative.
+
+## Hot, warm and cold context
+
+Implement:
+
+* hot context: directly included in the current capsule;
+* warm context: structured artifacts retrievable through validated context requests;
+* cold context: exact historical records retained for audit but excluded by default.
+
+## Progressive disclosure
+
+Implement a typed `request_context` operation.
+
+It must support validated requests for:
+
+* file excerpts;
+* symbols;
+* definitions;
+* references;
+* direct dependencies;
+* tests;
+* requirements;
+* ADRs;
+* UX criteria;
+* assumptions;
+* evidence;
+* prior findings;
+* task summaries.
+
+The backend decides what is returned, applies RepoGuard and role permissions, recomputes the token budget, persists a new capsule, and records the request.
+
+The model cannot provide an arbitrary filesystem path that bypasses repository policy.
+
+## Repository retrieval
+
+Use a staged strategy:
+
+1. repository/module map;
+2. symbol signatures and direct dependencies;
+3. target implementations;
+4. relevant tests;
+5. wider related code only when requested or justified.
+
+Use deterministic lexical, path, symbol, import, changed-file, requirement-link, and task-link signals initially.
+
+Do not require embeddings for the first production implementation.
+
+Design the retrieval interface so a future hybrid retriever can be introduced without changing role protocols.
+
+## Delta context
+
+For repeated role invocations, compile a delta since that role’s previous successful run:
+
+* changed authoritative artifacts;
+* new findings;
+* new evidence;
+* invalidated assumptions;
+* answered questions;
+* task transitions;
+* patch/application results;
+* relevant Pulse interventions.
+
+Do not resend unchanged historical transcripts by default.
+
+## Structured summaries
+
+Create versioned summaries for:
+
+* initiative;
+* role;
+* task;
+* repository subsystem;
+* evidence;
+* completed phases.
+
+Every summary must store:
+
+* source artifact and event IDs;
+* source version range;
+* summary version;
+* source hashes;
+* generated timestamp;
+* omission disclosure;
+* stale/valid status.
+
+Summaries are retrieval aids and never replace authoritative records.
+
+Automatically invalidate summaries when their sources change.
+
+## Context sufficiency checks
+
+Before invoking a role, deterministically confirm that its mandatory projection is present.
+
+Examples:
+
+* Builder receives active task, linked requirements, acceptance criteria, relevant constraints, and governing ADRs.
+* Verifier receives frozen requirements and implementation evidence.
+* Reviewer receives the exact frozen spec, ADR, UX Contract, final diff, and verification verdict.
+* FDE receives current objective, assumptions, and relevant outcome evidence.
+
+Record missing mandatory artifacts and block invocation when necessary.
+
+## Context drift
+
+Add deterministic Pulse monitors for:
+
+* stale spec in a capsule;
+* stale ADR in a capsule;
+* missing mandatory artifact;
+* critical material omitted for budget;
+* repeated context requests;
+* conflicting summaries;
+* stale summaries;
+* bundle churn;
+* context dominated by low-priority material;
+* repeated generation failure associated with omitted context;
+* token-pressure trend;
+* incorrect initiative or task binding.
+
+Add `context_pressure` and `context_drift` Pulse signal types.
+
+The liquid observer may observe these signals but cannot decide context truth or override deterministic checks.
+
+## Context UI
+
+For every agent invocation, show:
+
+* model window;
+* reserved output;
+* safety margin;
+* compiled input tokens;
+* remaining capacity;
+* role;
+* task;
+* spec version;
+* included items;
+* omitted items;
+* summaries used;
+* truncations;
+* token-estimation method;
+* exact prompt/messages;
+* context hash.
+
+Fix the current discrepancy where selected-file metadata can report the full file size although only the first 24,000 characters are placed in the prompt.
+
+## Testing
+
+Add tests for:
+
+* exact token-budget boundary;
+* mandatory-context overflow;
+* pruning order;
+* deterministic ordering;
+* task subdivision request;
+* role projection correctness;
+* role redaction;
+* context-request permissions;
+* RepoGuard enforcement;
+* summary invalidation;
+* delta compilation;
+* stale-spec rejection;
+* context drift;
+* model/runtime capability changes;
+* restart and capsule restoration;
+* character-versus-token accounting;
+* exact-context visibility;
+* backward compatibility with Assist Mode.
+
+Do not claim the multi-agent system is complete until context budgeting, retrieval, compaction, and overflow behavior are operational and tested.

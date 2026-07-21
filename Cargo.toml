@@ -8,6 +8,11 @@ members = [
   "crates/runtime-manager",
   "crates/audit-log",
   "crates/sandbox-runner",
+  "crates/intent-ledger",
+  "crates/orchestration-core",
+  "crates/pulse-engine",
+  "crates/worktree-manager",
+  "crates/context-os",
   "apps/desktop/src-tauri"
 ]
 

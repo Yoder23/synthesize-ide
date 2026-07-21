@@ -37,7 +37,9 @@ pub struct CommandRule {
 
 impl CommandRule {
     pub fn matches(&self, argv: &[String]) -> bool {
-        let Some(program) = argv.first() else { return false; };
+        let Some(program) = argv.first() else {
+            return false;
+        };
         if normalize(program) != normalize(&self.program) {
             return false;
         }
@@ -115,47 +117,243 @@ impl Default for CommandPolicy {
 
 fn default_rules() -> Vec<CommandRule> {
     vec![
-        block("git", &["push"], &[], "git push mutates a remote and uses network"),
-        block("git", &["pull"], &[], "git pull mutates the working tree and uses network"),
+        block(
+            "git",
+            &["push"],
+            &[],
+            "git push mutates a remote and uses network",
+        ),
+        block(
+            "git",
+            &["pull"],
+            &[],
+            "git pull mutates the working tree and uses network",
+        ),
         block("git", &["fetch"], &[], "git fetch uses network"),
-        block("git", &["checkout"], &[], "git checkout can mutate the working tree"),
-        block("git", &["switch"], &[], "git switch can mutate the working tree"),
+        block(
+            "git",
+            &["checkout"],
+            &[],
+            "git checkout can mutate the working tree",
+        ),
+        block(
+            "git",
+            &["switch"],
+            &[],
+            "git switch can mutate the working tree",
+        ),
         block("git", &["restore"], &[], "git restore can overwrite files"),
         block("git", &["add"], &[], "git add mutates the index"),
-        block("git", &["commit"], &[], "git commit mutates repository history"),
-        block("git", &["merge"], &[], "git merge can mutate the working tree"),
-        block("git", &["rebase"], &[], "git rebase rewrites history and mutates the working tree"),
-        block("git", &["reset"], &[], "git reset can mutate the index and working tree"),
+        block(
+            "git",
+            &["commit"],
+            &[],
+            "git commit mutates repository history",
+        ),
+        block(
+            "git",
+            &["merge"],
+            &[],
+            "git merge can mutate the working tree",
+        ),
+        block(
+            "git",
+            &["rebase"],
+            &[],
+            "git rebase rewrites history and mutates the working tree",
+        ),
+        block(
+            "git",
+            &["reset"],
+            &[],
+            "git reset can mutate the index and working tree",
+        ),
         block("git", &["clean"], &[], "git clean deletes untracked files"),
         block("git", &["stash"], &[], "git stash mutates repository state"),
-        approve("git", &["status"], &[], CommandRisk::ReadOnly, "git status is read-only"),
-        approve("git", &["diff"], &[], CommandRisk::ReadOnly, "git diff is read-only"),
-        approve("git", &["log"], &[], CommandRisk::ReadOnly, "git log is read-only"),
-        approve("rg", &[], &[], CommandRisk::ReadOnly, "ripgrep searches files"),
+        approve(
+            "git",
+            &["status"],
+            &[],
+            CommandRisk::ReadOnly,
+            "git status is read-only",
+        ),
+        approve(
+            "git",
+            &["diff"],
+            &[],
+            CommandRisk::ReadOnly,
+            "git diff is read-only",
+        ),
+        approve(
+            "git",
+            &["log"],
+            &[],
+            CommandRisk::ReadOnly,
+            "git log is read-only",
+        ),
+        approve(
+            "rg",
+            &[],
+            &[],
+            CommandRisk::ReadOnly,
+            "ripgrep searches files",
+        ),
         approve("ls", &[], &[], CommandRisk::ReadOnly, "ls lists files"),
         approve("cat", &[], &[], CommandRisk::ReadOnly, "cat prints files"),
-        approve("npm", &["install"], &[], CommandRisk::Network, "npm install may use network and mutates node_modules/lockfiles"),
-        approve("pnpm", &["install"], &[], CommandRisk::Network, "pnpm install may use network and mutates node_modules/lockfiles"),
-        approve("yarn", &["install"], &[], CommandRisk::Network, "yarn install may use network and mutates node_modules/lockfiles"),
-        approve("npm", &["test"], &[], CommandRisk::TestOrBuild, "npm test executes package scripts"),
-        approve("pnpm", &["test"], &[], CommandRisk::TestOrBuild, "pnpm test executes package scripts"),
-        approve("yarn", &["test"], &[], CommandRisk::TestOrBuild, "yarn test executes package scripts"),
-        approve("npm", &["run", "test"], &[], CommandRisk::TestOrBuild, "npm run test executes package scripts"),
-        approve("pnpm", &["run", "test"], &[], CommandRisk::TestOrBuild, "pnpm run test executes package scripts"),
-        approve("yarn", &["run", "test"], &[], CommandRisk::TestOrBuild, "yarn run test executes package scripts"),
-        approve("npm", &["run", "lint"], &[], CommandRisk::TestOrBuild, "npm run lint executes package scripts"),
-        approve("pnpm", &["run", "lint"], &[], CommandRisk::TestOrBuild, "pnpm run lint executes package scripts"),
-        approve("yarn", &["run", "lint"], &[], CommandRisk::TestOrBuild, "yarn run lint executes package scripts"),
-        approve("npm", &["run", "build"], &[], CommandRisk::TestOrBuild, "npm run build executes package scripts"),
-        approve("pnpm", &["run", "build"], &[], CommandRisk::TestOrBuild, "pnpm run build executes package scripts"),
-        approve("yarn", &["run", "build"], &[], CommandRisk::TestOrBuild, "yarn run build executes package scripts"),
-        approve("npm", &["run", "typecheck"], &[], CommandRisk::TestOrBuild, "npm run typecheck executes package scripts"),
-        approve("pnpm", &["run", "typecheck"], &[], CommandRisk::TestOrBuild, "pnpm run typecheck executes package scripts"),
-        approve("yarn", &["run", "typecheck"], &[], CommandRisk::TestOrBuild, "yarn run typecheck executes package scripts"),
-        approve("cargo", &["test"], &[], CommandRisk::TestOrBuild, "cargo test is a test/build command"),
-        approve("go", &["test"], &[], CommandRisk::TestOrBuild, "go test is a test/build command"),
-        approve("dotnet", &["test"], &[], CommandRisk::TestOrBuild, "dotnet test is a test/build command"),
-        approve("pytest", &[], &[], CommandRisk::TestOrBuild, "pytest is a test command"),
+        approve(
+            "npm",
+            &["install"],
+            &[],
+            CommandRisk::Network,
+            "npm install may use network and mutates node_modules/lockfiles",
+        ),
+        approve(
+            "pnpm",
+            &["install"],
+            &[],
+            CommandRisk::Network,
+            "pnpm install may use network and mutates node_modules/lockfiles",
+        ),
+        approve(
+            "yarn",
+            &["install"],
+            &[],
+            CommandRisk::Network,
+            "yarn install may use network and mutates node_modules/lockfiles",
+        ),
+        approve(
+            "npm",
+            &["test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "npm test executes package scripts",
+        ),
+        approve(
+            "pnpm",
+            &["test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "pnpm test executes package scripts",
+        ),
+        approve(
+            "yarn",
+            &["test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "yarn test executes package scripts",
+        ),
+        approve(
+            "npm",
+            &["run", "test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "npm run test executes package scripts",
+        ),
+        approve(
+            "pnpm",
+            &["run", "test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "pnpm run test executes package scripts",
+        ),
+        approve(
+            "yarn",
+            &["run", "test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "yarn run test executes package scripts",
+        ),
+        approve(
+            "npm",
+            &["run", "lint"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "npm run lint executes package scripts",
+        ),
+        approve(
+            "pnpm",
+            &["run", "lint"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "pnpm run lint executes package scripts",
+        ),
+        approve(
+            "yarn",
+            &["run", "lint"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "yarn run lint executes package scripts",
+        ),
+        approve(
+            "npm",
+            &["run", "build"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "npm run build executes package scripts",
+        ),
+        approve(
+            "pnpm",
+            &["run", "build"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "pnpm run build executes package scripts",
+        ),
+        approve(
+            "yarn",
+            &["run", "build"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "yarn run build executes package scripts",
+        ),
+        approve(
+            "npm",
+            &["run", "typecheck"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "npm run typecheck executes package scripts",
+        ),
+        approve(
+            "pnpm",
+            &["run", "typecheck"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "pnpm run typecheck executes package scripts",
+        ),
+        approve(
+            "yarn",
+            &["run", "typecheck"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "yarn run typecheck executes package scripts",
+        ),
+        approve(
+            "cargo",
+            &["test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "cargo test is a test/build command",
+        ),
+        approve(
+            "go",
+            &["test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "go test is a test/build command",
+        ),
+        approve(
+            "dotnet",
+            &["test"],
+            &[],
+            CommandRisk::TestOrBuild,
+            "dotnet test is a test/build command",
+        ),
+        approve(
+            "pytest",
+            &[],
+            &[],
+            CommandRisk::TestOrBuild,
+            "pytest is a test command",
+        ),
     ]
 }
 
@@ -169,7 +367,13 @@ fn block(program: &str, prefix: &[&str], contains: &[&str], reason: &str) -> Com
     }
 }
 
-fn approve(program: &str, prefix: &[&str], contains: &[&str], risk: CommandRisk, reason: &str) -> CommandRule {
+fn approve(
+    program: &str,
+    prefix: &[&str],
+    contains: &[&str],
+    risk: CommandRisk,
+    reason: &str,
+) -> CommandRule {
     CommandRule {
         program: program.into(),
         args_prefix: prefix.iter().map(|s| s.to_string()).collect(),
@@ -196,25 +400,39 @@ pub fn personal_terminal_policy() -> CommandPolicy {
     }
 }
 
-pub fn classify(req: &CommandRequest, policy: &CommandPolicy) -> Result<CommandRisk, CommandGuardError> {
+pub fn classify(
+    req: &CommandRequest,
+    policy: &CommandPolicy,
+) -> Result<CommandRisk, CommandGuardError> {
     let program = req.argv.first().ok_or(CommandGuardError::EmptyArgv)?;
     let program_norm = normalize(program);
 
-    if policy.deny_programs.iter().any(|p| normalize(p) == program_norm) {
+    if policy
+        .deny_programs
+        .iter()
+        .any(|p| normalize(p) == program_norm)
+    {
         return Err(CommandGuardError::Blocked(program_norm));
     }
 
     for rule in &policy.rules {
         if rule.matches(&req.argv) {
             return match &rule.action {
-                RuleAction::Block => Err(CommandGuardError::Blocked(format!("{} ({})", program_norm, rule.reason))),
+                RuleAction::Block => Err(CommandGuardError::Blocked(format!(
+                    "{} ({})",
+                    program_norm, rule.reason
+                ))),
                 RuleAction::Allow => Ok(CommandRisk::ReadOnly),
                 RuleAction::RequireApproval(risk) => Ok(risk.clone()),
             };
         }
     }
 
-    if !policy.allow_programs.iter().any(|p| normalize(p) == program_norm) {
+    if !policy
+        .allow_programs
+        .iter()
+        .any(|p| normalize(p) == program_norm)
+    {
         return Err(CommandGuardError::NotAllowed(program_norm));
     }
 
@@ -259,12 +477,19 @@ fn normalize_args(args: &[String]) -> Vec<String> {
 fn looks_test_or_build_structured(argv: &[String]) -> bool {
     argv.iter().any(|arg| {
         let arg = normalize(arg);
-        arg == "test" || arg == "lint" || arg == "build" || arg.ends_with(":test") || arg.ends_with(":lint")
+        arg == "test"
+            || arg == "lint"
+            || arg == "build"
+            || arg.ends_with(":test")
+            || arg.ends_with(":lint")
     })
 }
 
 fn normalize(s: &str) -> String {
-    s.trim().trim_matches('"').trim_matches('\'').to_ascii_lowercase()
+    s.trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -297,13 +522,20 @@ mod tests {
     #[test]
     fn classifies_npm_install_as_network() {
         let policy = CommandPolicy::default();
-        assert_eq!(classify(&req(&["npm", "install"]), &policy).unwrap(), CommandRisk::Network);
+        assert_eq!(
+            classify(&req(&["npm", "install"]), &policy).unwrap(),
+            CommandRisk::Network
+        );
     }
 
     #[test]
     fn blocks_shell_entrypoints() {
         let policy = CommandPolicy::default();
-        for argv in [["bash", "-c", "echo hi"], ["sh", "-c", "echo hi"], ["powershell", "-Command", "Get-ChildItem"]] {
+        for argv in [
+            ["bash", "-c", "echo hi"],
+            ["sh", "-c", "echo hi"],
+            ["powershell", "-Command", "Get-ChildItem"],
+        ] {
             let result = classify(&req(&argv), &policy);
             assert!(matches!(result, Err(CommandGuardError::Blocked(_))));
         }
@@ -312,8 +544,14 @@ mod tests {
     #[test]
     fn classifies_test_scripts_as_test_or_build() {
         let policy = CommandPolicy::default();
-        assert_eq!(classify(&req(&["pnpm", "test", "auth"]), &policy).unwrap(), CommandRisk::TestOrBuild);
-        assert_eq!(classify(&req(&["cargo", "test"]), &policy).unwrap(), CommandRisk::TestOrBuild);
+        assert_eq!(
+            classify(&req(&["pnpm", "test", "auth"]), &policy).unwrap(),
+            CommandRisk::TestOrBuild
+        );
+        assert_eq!(
+            classify(&req(&["cargo", "test"]), &policy).unwrap(),
+            CommandRisk::TestOrBuild
+        );
     }
 
     #[test]
@@ -329,20 +567,34 @@ mod tests {
         ];
         for argv in cases {
             let result = classify(&req(&argv), &policy);
-            assert!(matches!(result, Err(CommandGuardError::Blocked(_))), "expected block for {:?}, got {:?}", argv, result);
+            assert!(
+                matches!(result, Err(CommandGuardError::Blocked(_))),
+                "expected block for {:?}, got {:?}",
+                argv,
+                result
+            );
         }
     }
 
     #[test]
     fn package_scripts_still_require_approval() {
         let policy = CommandPolicy::default();
-        assert_eq!(classify(&req(&["npm", "run", "test"]), &policy).unwrap(), CommandRisk::TestOrBuild);
-        assert_eq!(classify(&req(&["pnpm", "test"]), &policy).unwrap(), CommandRisk::TestOrBuild);
+        assert_eq!(
+            classify(&req(&["npm", "run", "test"]), &policy).unwrap(),
+            CommandRisk::TestOrBuild
+        );
+        assert_eq!(
+            classify(&req(&["pnpm", "test"]), &policy).unwrap(),
+            CommandRisk::TestOrBuild
+        );
     }
 
     #[test]
     fn arbitrary_node_execution_is_blocked() {
-        let risk = classify(&req(&["node", "scripts/dangerous.js"]), &CommandPolicy::default());
+        let risk = classify(
+            &req(&["node", "scripts/dangerous.js"]),
+            &CommandPolicy::default(),
+        );
         assert!(matches!(risk, Err(CommandGuardError::Blocked(_))));
     }
 
@@ -356,9 +608,18 @@ mod tests {
     #[test]
     fn strict_personal_policy_allows_only_explicit_safe_git() {
         let policy = personal_terminal_policy();
-        assert_eq!(classify(&req(&["git", "status"]), &policy).unwrap(), CommandRisk::ReadOnly);
-        assert_eq!(classify(&req(&["git", "diff", "--", "src/main.rs"]), &policy).unwrap(), CommandRisk::ReadOnly);
-        assert_eq!(classify(&req(&["git", "log", "--oneline"]), &policy).unwrap(), CommandRisk::ReadOnly);
+        assert_eq!(
+            classify(&req(&["git", "status"]), &policy).unwrap(),
+            CommandRisk::ReadOnly
+        );
+        assert_eq!(
+            classify(&req(&["git", "diff", "--", "src/main.rs"]), &policy).unwrap(),
+            CommandRisk::ReadOnly
+        );
+        assert_eq!(
+            classify(&req(&["git", "log", "--oneline"]), &policy).unwrap(),
+            CommandRisk::ReadOnly
+        );
     }
 
     #[test]
@@ -377,7 +638,12 @@ mod tests {
         ];
         for argv in cases {
             let result = classify(&req(&argv), &policy);
-            assert!(matches!(result, Err(CommandGuardError::Blocked(_))), "expected block for {:?}, got {:?}", argv, result);
+            assert!(
+                matches!(result, Err(CommandGuardError::Blocked(_))),
+                "expected block for {:?}, got {:?}",
+                argv,
+                result
+            );
         }
     }
 
@@ -392,7 +658,10 @@ mod tests {
         let mut unknown = req(&["pnpm", "exec", "ts-node", "script.ts"]);
         unknown.requires_network = false;
         unknown.may_modify_files = false;
-        assert!(matches!(classify(&unknown, &policy), Err(CommandGuardError::NotAllowed(_))));
+        assert!(matches!(
+            classify(&unknown, &policy),
+            Err(CommandGuardError::NotAllowed(_))
+        ));
     }
 
     #[test]
@@ -411,8 +680,12 @@ mod tests {
             vec!["pytest"],
             vec!["dotnet", "test"],
         ] {
-            assert_eq!(classify(&req(&argv), &policy).unwrap(), CommandRisk::TestOrBuild, "{:?}", argv);
+            assert_eq!(
+                classify(&req(&argv), &policy).unwrap(),
+                CommandRisk::TestOrBuild,
+                "{:?}",
+                argv
+            );
         }
     }
-
 }

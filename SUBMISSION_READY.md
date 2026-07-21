@@ -43,6 +43,11 @@ Commit the generated `pnpm-lock.yaml` after `./scripts/hydrate-lockfile.sh`.
 
 ## Demo checklist
 
+- Run `./scripts/moa-winning-demo.ps1`.
+- Open `.synthesize-runtime/winning-demo/MISSION_CONTROL.html`.
+- Show `.synthesize-runtime/winning-demo/PRESENTATION_REPORT.md`.
+- Point to the local GGUF model and SHA-256 in `.synthesize-runtime/local-model.json`.
+- Show the raw model operation, MoA approval, checkpointed apply, and high-risk rejection.
 - Open fixture repo.
 - Show local runtime/fake runtime.
 - Select MoA Action Planner.

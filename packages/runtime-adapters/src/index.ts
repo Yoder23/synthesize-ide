@@ -232,3 +232,191 @@ export class FakeRuntimeAdapter implements LocalModelRuntime {
 function makeFixturePatch(path: string): string {
   return `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,3 +1,3 @@\n export function refreshToken() {\n-  throw new Error("not implemented");\n+  return "refreshed";\n }\n`;
 }
+
+// ---------------------------------------------------------------------------
+// Cloud Runtime Adapters
+// API keys are read from environment variables only — never hardcoded.
+// Endpoints are cloud-only (remote classification) and require explicit
+// user approval via the backend approval gate before repo context is sent.
+// ---------------------------------------------------------------------------
+
+export type CloudProviderConfig = {
+  /** API key loaded from env var at runtime — e.g. process.env.OPENAI_API_KEY */
+  apiKey: string;
+  model: string;
+  timeoutMs?: number;
+};
+
+/**
+ * CloudOpenAIAdapter routes requests to the OpenAI API using the
+ * OpenAI-compatible chat completions endpoint. Reserved for heavy-lift tasks
+ * that local Qwen3 skill agents hand off due to complexity or context size.
+ */
+export class CloudOpenAIAdapter implements LocalModelRuntime {
+  id = 'cloud-openai';
+  label = 'OpenAI Cloud (heavy-lift frontier)';
+  private readonly baseUrl = 'https://api.openai.com/v1';
+
+  constructor(private readonly config: CloudProviderConfig) {}
+
+  async listInstalledModels(): Promise<ModelInfo[]> {
+    return [
+      { id: 'gpt-4o', name: 'GPT-4o', runtime: 'cloud-openai', format: 'remote-compatible', endpoint: this.baseUrl, contextWindow: 128000, supportsJsonMode: true, supportsToolCalling: true, supportsEmbeddings: false, family: 'gpt', skillTier: 'cloud-heavy' },
+      { id: 'o3', name: 'o3', runtime: 'cloud-openai', format: 'remote-compatible', endpoint: this.baseUrl, contextWindow: 200000, supportsJsonMode: true, supportsToolCalling: true, supportsEmbeddings: false, family: 'gpt', skillTier: 'cloud-reasoning' }
+    ];
+  }
+
+  async importModel(_req: ImportModelRequest): Promise<ModelInfo> {
+    return { id: this.config.model, name: this.config.model, runtime: 'cloud-openai', format: 'remote-compatible', endpoint: this.baseUrl, contextWindow: 128000, supportsJsonMode: true, supportsToolCalling: true, supportsEmbeddings: false, family: 'gpt' };
+  }
+
+  async *installModel(_req: InstallModelRequest): AsyncIterable<InstallProgress> {
+    yield { phase: 'done', message: 'cloud provider: no local download required' };
+  }
+
+  async loadModel(req: LoadModelRequest): Promise<ModelHandle> {
+    return { modelId: req.modelId, runtimeId: this.id, loadedAt: new Date().toISOString() };
+  }
+
+  async unloadModel(_modelId: string): Promise<void> {}
+
+  async *generate(req: GenerateRequest): AsyncIterable<TokenEvent> {
+    if (!this.config.apiKey) {
+      yield { type: 'error', message: 'OPENAI_API_KEY is not set. Configure it in Settings or as an environment variable.' };
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 180000);
+    try {
+      const body: Record<string, unknown> = {
+        model: this.config.model,
+        messages: req.messages,
+        temperature: req.temperature,
+        max_tokens: req.maxTokens,
+        stream: false
+      };
+      if (req.responseFormat?.type === 'json_schema') {
+        body.response_format = { type: 'json_object' };
+      }
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.config.apiKey}` },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        yield { type: 'error', message: `OpenAI API error: HTTP ${response.status} ${text.slice(0, 500)}` };
+        return;
+      }
+      const json = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+      const content = json.choices?.[0]?.message?.content ?? '';
+      yield { type: 'token', text: content };
+      yield { type: 'usage', inputTokens: json.usage?.prompt_tokens ?? 0, outputTokens: json.usage?.completion_tokens ?? content.length };
+      yield { type: 'done' };
+    } catch (error) {
+      yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async embed(_req: EmbedRequest): Promise<number[][]> { return []; }
+
+  async health(): Promise<RuntimeHealth> {
+    if (!this.config.apiKey) return { status: 'failed', message: 'OPENAI_API_KEY not configured' };
+    return { status: 'ready', endpoint: this.baseUrl, message: 'OpenAI cloud endpoint (remote; requires explicit approval before repo context is sent)' };
+  }
+
+  async benchmark(modelId: string): Promise<ModelBenchmark> {
+    return { modelId, promptTokensPerSecond: 0, generationTokensPerSecond: 0 };
+  }
+}
+
+/**
+ * CloudAnthropicAdapter routes requests to the Anthropic Messages API.
+ * Anthropic does not expose an OpenAI-compatible endpoint natively,
+ * so this adapter translates the request format.
+ * Reserved for heavy-lift tasks handed off by local Qwen3 skill agents.
+ */
+export class CloudAnthropicAdapter implements LocalModelRuntime {
+  id = 'cloud-anthropic';
+  label = 'Anthropic Cloud (heavy-lift frontier)';
+  private readonly baseUrl = 'https://api.anthropic.com/v1';
+
+  constructor(private readonly config: CloudProviderConfig) {}
+
+  async listInstalledModels(): Promise<ModelInfo[]> {
+    return [
+      { id: 'claude-sonnet-4-5', name: 'Claude Sonnet (Anthropic)', runtime: 'cloud-anthropic', format: 'remote-compatible', endpoint: this.baseUrl, contextWindow: 200000, supportsJsonMode: true, supportsToolCalling: true, supportsEmbeddings: false, family: 'claude', skillTier: 'cloud-heavy' }
+    ];
+  }
+
+  async importModel(_req: ImportModelRequest): Promise<ModelInfo> {
+    return { id: this.config.model, name: this.config.model, runtime: 'cloud-anthropic', format: 'remote-compatible', endpoint: this.baseUrl, contextWindow: 200000, supportsJsonMode: true, supportsToolCalling: true, supportsEmbeddings: false, family: 'claude' };
+  }
+
+  async *installModel(_req: InstallModelRequest): AsyncIterable<InstallProgress> {
+    yield { phase: 'done', message: 'cloud provider: no local download required' };
+  }
+
+  async loadModel(req: LoadModelRequest): Promise<ModelHandle> {
+    return { modelId: req.modelId, runtimeId: this.id, loadedAt: new Date().toISOString() };
+  }
+
+  async unloadModel(_modelId: string): Promise<void> {}
+
+  async *generate(req: GenerateRequest): AsyncIterable<TokenEvent> {
+    if (!this.config.apiKey) {
+      yield { type: 'error', message: 'ANTHROPIC_API_KEY is not set. Configure it in Settings or as an environment variable.' };
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 180000);
+    try {
+      const systemMessages = req.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+      const userMessages = req.messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+      const body: Record<string, unknown> = {
+        model: this.config.model,
+        max_tokens: req.maxTokens,
+        messages: userMessages
+      };
+      if (systemMessages) body.system = systemMessages;
+      const response = await fetch(`${this.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.config.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        yield { type: 'error', message: `Anthropic API error: HTTP ${response.status} ${text.slice(0, 500)}` };
+        return;
+      }
+      const json = await response.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
+      const content = json.content?.find((b) => b.type === 'text')?.text ?? '';
+      yield { type: 'token', text: content };
+      yield { type: 'usage', inputTokens: json.usage?.input_tokens ?? 0, outputTokens: json.usage?.output_tokens ?? content.length };
+      yield { type: 'done' };
+    } catch (error) {
+      yield { type: 'error', message: error instanceof Error ? error.message : String(error) };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async embed(_req: EmbedRequest): Promise<number[][]> { return []; }
+
+  async health(): Promise<RuntimeHealth> {
+    if (!this.config.apiKey) return { status: 'failed', message: 'ANTHROPIC_API_KEY not configured' };
+    return { status: 'ready', endpoint: this.baseUrl, message: 'Anthropic cloud endpoint (remote; requires explicit approval before repo context is sent)' };
+  }
+
+  async benchmark(modelId: string): Promise<ModelBenchmark> {
+    return { modelId, promptTokensPerSecond: 0, generationTokensPerSecond: 0 };
+  }
+}

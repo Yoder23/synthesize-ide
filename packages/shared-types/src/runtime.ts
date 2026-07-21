@@ -5,7 +5,11 @@ export type RuntimeKind =
   | 'transformers'
   | 'ollama'
   | 'lmstudio'
-  | 'openai-compatible';
+  | 'openai-compatible'
+  | 'cloud-openai'
+  | 'cloud-anthropic';
+
+export type SkillTier = 'fast' | 'balanced' | 'powerful' | 'frontier-local' | 'cloud-heavy' | 'cloud-reasoning';
 
 export type ModelFormat = 'gguf' | 'safetensors' | 'mlx' | 'remote-compatible';
 
@@ -16,7 +20,9 @@ export type ModelInfo = {
   format: ModelFormat;
   localPath?: string;
   endpoint?: string;
-  family?: 'qwen' | 'deepseek' | 'llama' | 'starcoder' | 'codestral' | 'custom';
+  family?: 'qwen' | 'deepseek' | 'llama' | 'starcoder' | 'codestral' | 'gpt' | 'claude' | 'custom';
+  skillTier?: SkillTier;
+  apiKeyEnvVar?: string;
   contextWindow: number;
   supportsJsonMode: boolean;
   supportsToolCalling: boolean;

@@ -6,7 +6,11 @@ Synthesize IDE: Local AI coding with MoA-governed action safety
 
 ## One-line pitch
 
-Synthesize IDE lets local AI models propose coding actions while a trusted MoA/Synthesize backend validates, approves, applies, rolls back, and audits every change.
+Synthesize IDE turns a local coding model into an auditable action-taking agent: the model proposes, MoA gates, Synthesize validates, checkpoints, applies, blocks unsafe actions, and records every step.
+
+## AI tooling disclosure
+
+This project was built with significant assistance from GitHub Copilot (GPT-5.3-Codex) for implementation support, refactoring, and documentation drafting. Final architecture, governance, and release decisions were made by the project author.
 
 ## Category
 
@@ -41,7 +45,27 @@ See `docs/submission-architecture.md` and `docs/moa-bridge.md`.
 - MoA bridge process at `integrations/moa/synthesize_bridge.py`
 - Bridge tests at `integrations/moa/tests/test_synthesize_bridge.py`
 
-## Demo script (5-7 minutes)
+## Live proof script (2 minutes)
+
+Run the no-Ollama local model action proof:
+
+```powershell
+./scripts/bootstrap-local-model.ps1 -Model coder-1.5b
+./scripts/demo-preflight.ps1
+./scripts/moa-winning-demo.ps1
+```
+
+This starts a local llama.cpp server for Qwen2.5 Coder 1.5B GGUF, asks the model for a Synthesize typed patch operation, gates it through MoA, validates path and before-hash, applies it with a checkpoint, writes an audit log, then proves a high-risk action is blocked before execution.
+
+Generated artifacts:
+
+- `.synthesize-runtime/winning-demo/audit.jsonl`
+- `.synthesize-runtime/winning-demo/PRESENTATION_REPORT.md`
+- `.synthesize-runtime/winning-demo/MISSION_CONTROL.html`
+- `.synthesize-runtime/winning-demo/repo/src/auth/refresh.ts`
+- `.synthesize-runtime/winning-demo/checkpoint/src/auth/refresh.ts`
+
+## GUI demo script (5-7 minutes)
 
 1. Open Synthesize IDE and a sample repo.
 2. Select **MoA Action Planner** profile.
@@ -67,8 +91,11 @@ This runs:
 - `pnpm typecheck`
 - `pnpm build`
 - `pnpm test`
-- `C:\Python310\python.exe integrations/moa/synthesize_bridge.py --self-test`
-- `C:\Python310\python.exe -m pytest integrations/moa/tests/test_synthesize_bridge.py -q`
+- `py -3 integrations/moa/synthesize_bridge.py --self-test` (or `python ...`)
+- `py -3 integrations/moa/verify_moa.py` (or `python ...`)
+- `py -3 -m pytest integrations/moa/tests -q` (or `python -m pytest ...`)
+
+`submission-check.ps1` resolves Python automatically via `py -3` or `python` unless `-Python` is provided.
 
 ## Packaging
 

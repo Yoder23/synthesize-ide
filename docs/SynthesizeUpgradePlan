@@ -1,0 +1,2361 @@
+# Synthesize: Outcome-Governed Autonomous Product Studio
+
+You are Codex acting as the principal engineer, systems architect, security reviewer, test engineer, and implementation owner for the Synthesize IDE repository.
+
+Your mission is to transform the current local-first governed AI coding workbench into an **outcome-governed, multi-role product-development environment** without weakening its existing security model.
+
+Do not stop after writing a plan, architectural document, mock interface, or partial scaffold. Inspect the repository, establish a baseline, design the migration, implement the system in coherent vertical slices, run the complete validation suite repeatedly, repair failures, update documentation, and produce an evidence-backed completion report.
+
+Do not claim that a requirement is complete unless it is implemented, reachable through the product, persisted where required, tested, and included in the final verification report.
+
+---
+
+# 1. Product vision
+
+Synthesize must become a local, governed, self-directed product-development environment that can:
+
+1. Turn a user prompt into product goals, business reasoning, UX concepts, architecture alternatives, implementation tasks, verified code, and an auditable final change set.
+2. Coordinate specialized AI roles while keeping every role inside the existing trusted-operation boundary.
+3. Preserve a persistent connection from business intent to requirements, architecture, code operations, verification evidence, and eventual outcomes.
+4. Detect intent, requirements, architecture, constraint, assumption, scope, value, and coordination drift during development.
+5. Generate ambitious product opportunities in a new Dream Mode without autonomously modifying or merging into the user’s active branch.
+6. Generate declarative UX prototypes that provide the builder with concrete visual, behavioral, accessibility, and state-management targets.
+7. Monitor development as a time-evolving process through a hybrid symbolic and continuous-time Pulse system.
+8. Allow agents to publish structured beliefs, ask one another targeted questions, reconcile disagreements, and replan when evidence invalidates assumptions.
+9. Produce proof-carrying change sets that explain:
+
+   * why the change exists;
+   * what outcome it serves;
+   * which assumptions support it;
+   * which requirements define it;
+   * which architecture decision governs it;
+   * which operations implemented it;
+   * which tests and reviews verify it;
+   * and what remains uncertain.
+
+The intended product identity is:
+
+> Synthesize can imagine a product future, but every change must earn its way into the product through traceable intent, governed authority, and concrete evidence.
+
+---
+
+# 2. Non-negotiable invariant
+
+Preserve the repository’s existing core invariant:
+
+> Models never act directly. Models propose typed operations and structured artifacts. The trusted backend validates, persists, authorizes, applies, executes, rolls back, and audits all effects.
+
+This invariant applies to every new role and mode.
+
+No role may:
+
+* write directly to repository files;
+* execute unrestricted shell text;
+* bypass RepoGuard;
+* bypass patch validation;
+* approve its own patch;
+* apply raw frontend-provided patch content;
+* manufacture approval records;
+* select arbitrary checkpoint paths;
+* run an unapproved command;
+* merge into the active branch;
+* alter the standing mandate governing Dream Mode;
+* mark requirements verified without evidence;
+* convert a neural risk score into authority;
+* expose or claim to expose private chain-of-thought.
+
+Visible agent traces must consist only of structured artifacts, decisions, concise rationale, questions, findings, evidence, and proposed actions.
+
+Repository contents, model responses, generated prototypes, command output, test output, and external text are untrusted inputs.
+
+---
+
+# 3. Execution rules for this assignment
+
+## 3.1 Begin with repository reconnaissance
+
+Before modifying files:
+
+1. Read all repository-level instructions, including any `AGENTS.md`.
+2. Inspect at minimum:
+
+   * `README.md`
+   * `SECURITY.md`
+   * `IMPLEMENTATION_NOTES.md`
+   * `Cargo.toml`
+   * root `package.json`
+   * `docs/architecture.md`
+   * `docs/agent-protocol.md`
+   * `docs/agent-profiles.md`
+   * `docs/context-retention.md`
+   * `docs/context-visibility.md`
+   * `docs/session-log.md`
+   * `docs/threat-model.md`
+   * `docs/known-limitations.md`
+   * `docs/production-readiness.md`
+   * `docs/moa-action-mode.md`
+   * the current audit schema
+   * all existing Rust crates
+   * the Tauri backend entry point and commands
+   * the React application shell
+   * existing frontend feature modules
+   * shared TypeScript packages
+   * fake-runtime fixtures and tests.
+3. Locate the actual implementation of:
+
+   * context bundle creation;
+   * runtime calls;
+   * agent profile compilation;
+   * typed-operation parsing;
+   * patch proposal persistence;
+   * validation, approval, apply, checkpoint, and rollback;
+   * task detection and command approval;
+   * audit-event persistence;
+   * session replay;
+   * frontend-to-Tauri command boundaries.
+4. Search for incomplete code, TODOs, duplicated domain models, frontend-owned authority, and monolithic logic.
+5. Record the findings in:
+
+   * `docs/specs/outcome-governed-studio/repository-assessment.md`
+
+Do not assume this prompt’s suggested module boundaries perfectly match the current code. The repository is the source of truth. Adapt names and locations when necessary while preserving every behavioral requirement in this specification.
+
+## 3.2 Establish a baseline
+
+Run all applicable existing checks before implementation:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Run the project’s documented release or submission checks when available.
+
+Record:
+
+* command;
+* success or failure;
+* failure reason;
+* whether failure predates this work;
+* relevant output summary.
+
+Write this to:
+
+* `docs/specs/outcome-governed-studio/baseline.md`
+
+Do not silently normalize an existing failure as success.
+
+## 3.3 Create the implementation specification before coding
+
+Create:
+
+* `docs/specs/outcome-governed-studio/spec.md`
+* `docs/specs/outcome-governed-studio/data-model.md`
+* `docs/specs/outcome-governed-studio/state-machines.md`
+* `docs/specs/outcome-governed-studio/security-model.md`
+* `docs/specs/outcome-governed-studio/test-plan.md`
+* `docs/specs/outcome-governed-studio/implementation-plan.md`
+
+These documents must translate this master specification into repository-specific files, modules, migrations, commands, and test cases.
+
+Do not stop after creating these documents. Begin implementation immediately after validating that the plan preserves current behavior.
+
+## 3.4 Work in vertical slices
+
+Implement in the phases defined later in this specification.
+
+After each phase:
+
+1. format;
+2. type-check;
+3. run relevant unit tests;
+4. run relevant integration tests;
+5. repair regressions before continuing;
+6. update `implementation-progress.md`;
+7. record which acceptance criteria are now demonstrably satisfied.
+
+Do not accumulate a large untested rewrite.
+
+## 3.5 Do not hide incompleteness
+
+Forbidden completion shortcuts include:
+
+* placeholder buttons with no backend behavior;
+* database tables with no repository or command layer;
+* agent profiles that are never invoked;
+* hard-coded demonstration output presented as generated output;
+* random liquid-network weights presented as meaningful predictions;
+* “verified” status based only on an LLM statement;
+* tests that only assert rendering without testing state transitions;
+* deleting or weakening existing security tests;
+* changing tests merely to accept incorrect behavior;
+* catch-all exception handling that converts failure into success;
+* silently skipping unavailable validation.
+
+A feature may be explicitly labeled experimental or shadow-only when required by this specification. Experimental status must be visible in the UI and documentation.
+
+---
+
+# 4. Required architectural direction
+
+Build a backend-owned orchestration system around the existing trusted layers.
+
+The target conceptual architecture is:
+
+```text
+UI Shell
+  ├─ Assist workspace
+  ├─ Studio workspace
+  ├─ Dream workspace
+  ├─ Dream Inbox
+  ├─ Initiative workspace
+  ├─ Intent and evidence graph
+  ├─ UX prototype renderer
+  ├─ Team timeline
+  ├─ Pulse dashboard
+  ├─ Diff/evidence review
+  └─ autonomy controls
+
+Trusted Tauri Boundary
+  ├─ orchestration commands
+  ├─ artifact commands
+  ├─ context commands
+  ├─ worktree commands
+  ├─ pulse commands
+  ├─ verification commands
+  └─ existing governed patch/task commands
+
+Orchestration Core
+  ├─ initiative state machine
+  ├─ role scheduler
+  ├─ task graph
+  ├─ transition policy
+  ├─ retry and progress policy
+  ├─ intervention router
+  ├─ budget enforcement
+  └─ recovery/resume
+
+Intent and Evidence Layer
+  ├─ business context
+  ├─ objectives
+  ├─ opportunity hypotheses
+  ├─ assumptions
+  ├─ constraints
+  ├─ requirements
+  ├─ acceptance criteria
+  ├─ architecture decisions
+  ├─ UX contracts
+  ├─ task evidence
+  └─ outcome evidence
+
+Agent Harness
+  ├─ Dreamer
+  ├─ Forward-Deployed Engineer
+  ├─ UX Designer
+  ├─ Skeptic
+  ├─ Architect
+  ├─ Planner
+  ├─ Builder
+  ├─ Verifier
+  └─ Reviewer
+
+Pulse
+  ├─ timestamped event stream
+  ├─ deterministic monitors
+  ├─ belief divergence
+  ├─ progress/churn analysis
+  ├─ continuous-time observer
+  ├─ signal explanation
+  └─ bounded intervention proposals
+
+Existing Governance
+  ├─ RepoGuard
+  ├─ typed operation parser
+  ├─ patch validator
+  ├─ persisted approval
+  ├─ transactional apply
+  ├─ checkpoints and rollback
+  ├─ command guard
+  ├─ governed tasks
+  ├─ audit log
+  └─ context visibility
+```
+
+Create focused Rust modules or crates rather than adding orchestration to the Tauri `main.rs` monolith.
+
+Create focused React feature modules rather than adding the entire product to `App.tsx`.
+
+Exact crate names may be adapted, but the implementation should strongly consider dedicated modules equivalent to:
+
+* `orchestration-core`
+* `intent-ledger`
+* `pulse-engine`
+* `worktree-manager`
+
+Domain logic must be testable without launching Tauri.
+
+Tauri commands should be thin adapters around domain services.
+
+Frontend components must not become the authority for lifecycle transitions.
+
+---
+
+# 5. Persistent domain model
+
+Use SQLite through the existing audit/persistence boundary. Introduce explicit schema versioning and forward migrations. Do not destructively replace existing user data.
+
+Add repository-tested migrations for the following conceptual entities.
+
+## 5.1 Initiative
+
+An initiative is the durable container for prompted Studio work or autonomous Dream work.
+
+Required fields include:
+
+```json
+{
+  "id": "INIT-...",
+  "sessionId": "session-...",
+  "mode": "studio",
+  "title": "Add governed multi-role delivery",
+  "source": "user_prompt",
+  "status": "discovery",
+  "standingMandateId": null,
+  "activeSpecVersion": 1,
+  "activeWorktreeId": null,
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+```
+
+Supported modes:
+
+* `assist`
+* `studio`
+* `dream_ideation`
+* `dream_prototype`
+* `dream_incubator`
+
+Supported top-level statuses:
+
+* `created`
+* `discovery`
+* `concepting`
+* `challenging`
+* `ux_design`
+* `architecture`
+* `planning`
+* `awaiting_scope_approval`
+* `implementing`
+* `verifying`
+* `reviewing`
+* `awaiting_merge_review`
+* `completed`
+* `blocked`
+* `paused`
+* `abandoned`
+* `failed`
+
+Transitions must be backend validated.
+
+## 5.2 Business context
+
+Persist local structured context such as:
+
+* product vision;
+* target users;
+* known customer or user problems;
+* strategic principles;
+* business constraints;
+* security constraints;
+* product non-goals;
+* technical-debt tolerance;
+* performance expectations;
+* supported environments;
+* local hardware constraints;
+* historical decisions;
+* previous initiative outcomes.
+
+Business context is not automatically sent in full to every role.
+
+The context broker must select only the role-relevant subset and persist the exact bundle sent.
+
+## 5.3 Opportunity hypotheses and Dream Contracts
+
+A Dreamer output is an option, not an approved goal.
+
+Implement a `DreamContract` equivalent to:
+
+```json
+{
+  "id": "DREAM-...",
+  "initiativeId": "INIT-...",
+  "title": "Project Memory Atlas",
+  "horizon": "strategic",
+  "problemObserved": "Agents repeatedly rediscover architecture decisions.",
+  "proposedFuture": "A visual evidence graph connects intent, decisions, code and failures.",
+  "supportingEvidence": [],
+  "expectedValue": [],
+  "counterarguments": [],
+  "assumptions": [],
+  "smallestExperiment": "...",
+  "estimatedCost": "medium",
+  "reversibility": "high",
+  "noveltyRationale": "...",
+  "confidence": 0.58,
+  "status": "proposed"
+}
+```
+
+Dream horizons:
+
+* `adjacent`
+* `strategic`
+* `moonshot`
+
+Dream lifecycle:
+
+* `proposed`
+* `deduplicated`
+* `challenged`
+* `rejected`
+* `shortlisted`
+* `prototype_approved`
+* `prototyping`
+* `validated`
+* `promoted_to_goal`
+* `archived`
+
+## 5.4 Objective and outcome hypothesis
+
+Persist:
+
+* business objective;
+* user problem;
+* desired outcome;
+* measurable success signal;
+* baseline when known;
+* target when known;
+* confidence;
+* time horizon;
+* owner role;
+* status.
+
+Do not require telemetry integration to mark coding complete, but distinguish:
+
+* implementation completion;
+* verification completion;
+* outcome pending;
+* outcome confirmed;
+* outcome disproven.
+
+## 5.5 Assumption register
+
+Every material assumption must include:
+
+```json
+{
+  "id": "ASM-...",
+  "claim": "Users prefer automatic repair loops.",
+  "kind": "product",
+  "source": "inference",
+  "confidence": 0.42,
+  "impactIfFalse": "high",
+  "supportingEvidence": [],
+  "contradictingEvidence": [],
+  "validationRequired": true,
+  "status": "unvalidated"
+}
+```
+
+Kinds:
+
+* product;
+* user;
+* business;
+* technical;
+* architecture;
+* security;
+* operational;
+* data;
+* performance.
+
+Statuses:
+
+* `unvalidated`
+* `believed_true`
+* `believed_false`
+* `validated`
+* `invalidated`
+* `superseded`
+
+An invalidated high-impact assumption must create a replan candidate. It must not be silently rewritten.
+
+## 5.6 Constraints and non-goals
+
+Constraints must be first-class, versioned, attributable, and testable when possible.
+
+Examples:
+
+* all file writes pass through the Rust backend;
+* no network in Dream worktrees by default;
+* merge authority remains human-only;
+* no arbitrary shell execution;
+* no modification outside approved path scope.
+
+Non-goals must remain visible to the planner, reviewer, and drift engine.
+
+## 5.7 Requirements and acceptance criteria
+
+Requirements must have stable identifiers.
+
+Each requirement includes:
+
+* description;
+* source objective;
+* priority;
+* risk;
+* approved scope;
+* dependencies;
+* acceptance criteria;
+* required evidence;
+* implementation status;
+* verification status;
+* outcome status.
+
+Requirement state machine:
+
+```text
+PROPOSED
+  → APPROVED
+  → IMPLEMENTATION_STARTED
+  → IMPLEMENTED
+  → VERIFICATION_PENDING
+  → VERIFIED
+  → OUTCOME_PENDING
+  → OUTCOME_CONFIRMED
+```
+
+Alternative states:
+
+* `REJECTED`
+* `BLOCKED`
+* `FAILED`
+* `REPAIRING`
+* `SUPERSEDED`
+
+A requirement may only become `VERIFIED` when all mandatory evidence records exist and pass.
+
+## 5.8 Architecture alternatives and ADRs
+
+The Architect must generate at least two materially different options for significant work unless the change is demonstrably trivial.
+
+Each option must compare:
+
+* business value;
+* implementation cost;
+* security implications;
+* performance;
+* reversibility;
+* migration complexity;
+* consistency with existing architecture;
+* maintenance burden;
+* local hardware impact;
+* failure modes.
+
+Persist the selected option as an ADR with:
+
+* context;
+* considered alternatives;
+* decision;
+* rationale;
+* consequences;
+* constraints enforced;
+* affected requirements;
+* conformance checks;
+* status.
+
+ADR states:
+
+* `proposed`
+* `approved`
+* `superseded`
+* `rejected`
+
+## 5.9 UX Contract
+
+The UX role must produce a declarative, non-executable UX contract.
+
+It must include:
+
+* target persona;
+* user journey;
+* information architecture;
+* screen hierarchy;
+* component hierarchy;
+* state-transition model;
+* interactions;
+* loading states;
+* empty states;
+* error states;
+* blocked states;
+* recovery states;
+* keyboard behavior;
+* accessibility requirements;
+* responsive behavior;
+* copy guidance;
+* design tokens;
+* UX acceptance criteria;
+* unresolved questions.
+
+Do not execute arbitrary model-generated JavaScript inside the trusted Synthesize UI.
+
+Create a trusted declarative prototype renderer. The UX role emits a validated JSON document using an allowlisted component and interaction schema. The trusted frontend renders that document with fake data.
+
+Prototype document primitives may include:
+
+* layout;
+* stack;
+* split pane;
+* tabs;
+* card;
+* text;
+* status badge;
+* progress indicator;
+* button;
+* form field;
+* table;
+* timeline;
+* graph placeholder;
+* diff placeholder;
+* code placeholder;
+* modal;
+* callout.
+
+Interactions in the declarative prototype may only modify prototype-local state. They may not access files, network, processes, Tauri commands, browser storage outside the prototype namespace, or the active repository.
+
+## 5.10 Task graph
+
+The Planner converts the approved specification into bounded tasks.
+
+Each task includes:
+
+* stable ID;
+* requirement IDs;
+* ADR IDs;
+* UX acceptance IDs;
+* dependencies;
+* allowed paths;
+* expected files;
+* forbidden paths;
+* required context;
+* validation commands;
+* expected artifacts;
+* maximum iterations;
+* status;
+* assigned role;
+* evidence.
+
+Task states:
+
+* `ready`
+* `in_progress`
+* `awaiting_operation_approval`
+* `applied`
+* `verifying`
+* `reviewing`
+* `revising`
+* `replanning`
+* `passed`
+* `blocked`
+* `failed`
+* `cancelled`
+
+## 5.11 Agent runs and artifacts
+
+Persist each role invocation separately.
+
+Each run records:
+
+* role;
+* model/runtime;
+* profile version;
+* context bundle ID;
+* initiative/spec/task version;
+* start/end timestamps;
+* status;
+* input artifact IDs;
+* output artifact IDs;
+* parse/validation result;
+* token estimate where available;
+* error summary.
+
+Structured artifacts include:
+
+* Dream Contract;
+* FDE brief;
+* assumption record;
+* objective;
+* UX Contract;
+* declarative prototype;
+* architecture alternative;
+* ADR;
+* implementation spec;
+* task graph;
+* belief snapshot;
+* question;
+* answer;
+* finding;
+* verification evidence;
+* review verdict;
+* final outcome report.
+
+## 5.12 Agent beliefs
+
+After important actions, roles publish concise structured beliefs rather than hidden reasoning.
+
+Example:
+
+```json
+{
+  "agentRole": "builder",
+  "taskId": "TASK-031",
+  "believesComplete": ["REQ-014"],
+  "believesBlocked": ["REQ-018"],
+  "architectureFollowed": ["ADR-008"],
+  "assumptionStatuses": [
+    {
+      "assumptionId": "ASM-011",
+      "status": "believed_true",
+      "confidence": 0.73
+    }
+  ],
+  "uncertainties": [
+    "Whether generated files are included in rename scope."
+  ],
+  "requestedQuestions": []
+}
+```
+
+Beliefs do not change authoritative requirement or ADR state.
+
+## 5.13 Questions and alignment threads
+
+Agents may ask probing questions through a structured protocol:
+
+```json
+{
+  "id": "QUESTION-...",
+  "fromRole": "verifier",
+  "toRole": "fde",
+  "initiativeId": "INIT-...",
+  "taskId": "TASK-...",
+  "reason": "Scope ambiguity affects acceptance evidence.",
+  "question": "Are generated files included in the rename requirement?",
+  "blocking": true,
+  "status": "open"
+}
+```
+
+Questions and answers must be visible in the Team timeline and persisted.
+
+Blocking questions pause only the affected task unless policy requires initiative-wide pause.
+
+## 5.14 Verification evidence
+
+Evidence types include:
+
+* compilation;
+* type check;
+* unit test;
+* integration test;
+* end-to-end test;
+* static policy check;
+* architecture conformance;
+* UX conformance;
+* accessibility check;
+* runtime observation;
+* diff review;
+* manual review;
+* security review;
+* benchmark;
+* screenshot or rendered-state record;
+* outcome metric.
+
+Evidence records must include provenance and must not store giant output blobs directly in UI event payloads.
+
+## 5.15 Budgets and mandates
+
+Persist human-approved autonomy limits:
+
+```json
+{
+  "id": "MANDATE-...",
+  "name": "Local product exploration",
+  "purpose": "Seek reversible improvements to local governed AI development.",
+  "allowedModes": ["dream_ideation", "dream_prototype"],
+  "allowedRepoPaths": [],
+  "maximumCandidatesPerCycle": 10,
+  "maximumPrototypesPerCycle": 2,
+  "maximumBuilderIterations": 8,
+  "maximumChangedFiles": 20,
+  "maximumElapsedMinutes": 240,
+  "networkPolicy": "disabled",
+  "packageInstallPolicy": "forbidden",
+  "activeBranchWritePolicy": "forbidden",
+  "mergeAuthority": "human_only",
+  "enabled": false
+}
+```
+
+The backend must enforce these limits.
+
+---
+
+# 6. Required roles
+
+All roles must use isolated logical sessions and role-specific context bundles.
+
+The same local model endpoint may serve multiple roles sequentially. Do not require multiple 80B models to be resident simultaneously.
+
+Support per-role runtime configuration, but provide a safe default that reuses one configured local runtime.
+
+## 6.1 Dreamer
+
+Purpose:
+
+* identify overlooked opportunities;
+* propose adjacent, strategic, and moonshot futures;
+* synthesize repeated friction, failures, technical debt, and product context;
+* generate falsifiable opportunity hypotheses;
+* propose the smallest useful experiment.
+
+The Dreamer must not:
+
+* approve its own idea;
+* create an implementation goal directly;
+* modify code;
+* conceal counterarguments;
+* treat novelty as value.
+
+Required output:
+
+* one or more validated Dream Contracts.
+
+## 6.2 Forward-Deployed Engineer
+
+Use the display name **Forward-Deployed Engineer** and short label **FDE**.
+
+Purpose:
+
+* own the connection between business context and technical delivery;
+* uncover the underlying problem beneath the requested solution;
+* challenge whether code is needed;
+* create objectives and outcome hypotheses;
+* distinguish facts from requirements, inferences, assumptions, and unknowns;
+* evaluate Dream Contracts;
+* select or reject opportunities;
+* define value, constraints, and non-goals;
+* review whether implementation still serves the approved outcome;
+* trigger replanning when assumptions fail.
+
+The FDE must be able to recommend:
+
+* proceed;
+* run a smaller experiment;
+* simplify;
+* defer;
+* reject the feature;
+* reframe the goal.
+
+Required output:
+
+* FDE brief;
+* objective;
+* outcome hypothesis;
+* assumption register;
+* constraints;
+* non-goals;
+* promoted or rejected opportunity decision.
+
+## 6.3 UX Designer
+
+Purpose:
+
+* translate the objective into a coherent user experience;
+* generate competing UX directions when appropriate;
+* produce a declarative interactive prototype;
+* define behavior, not merely appearance;
+* define accessibility and recovery behavior;
+* compare the running implementation with the approved UX Contract.
+
+Required outputs:
+
+* UX Contract;
+* declarative prototype document;
+* UX acceptance criteria;
+* post-implementation UX conformance report.
+
+The UX role may not execute generated arbitrary UI code in the trusted app.
+
+## 6.4 Skeptic / Product Red Team
+
+Purpose:
+
+* search for unsupported value claims;
+* challenge solution-first reasoning;
+* detect renamed duplicates of previous ideas;
+* identify maintenance, security, complexity, and adoption risks;
+* propose cheaper disconfirming experiments;
+* challenge prototypes that look compelling but lack evidence;
+* identify when agents are reinforcing one another without independent evidence.
+
+Required outputs:
+
+* blocking and non-blocking findings;
+* disconfirmation experiment;
+* recommendation of `REJECT`, `REVISE`, `EXPERIMENT`, or `PROCEED`.
+
+The Skeptic cannot permanently veto work by itself. Blocking findings route to the FDE or human according to policy.
+
+## 6.5 Architect
+
+Purpose:
+
+* inspect the repository;
+* generate architecture alternatives;
+* evaluate tradeoffs;
+* produce an ADR;
+* define conformance rules;
+* review architectural drift.
+
+Required outputs:
+
+* architecture options;
+* selected ADR proposal;
+* architecture conformance checks;
+* architecture review findings.
+
+The Architect does not implement code unless explicitly invoked in a Builder role session.
+
+## 6.6 Planner
+
+Purpose:
+
+* convert approved objective, constraints, UX Contract, and ADR into a versioned executable specification;
+* create a dependency-aware task graph;
+* scope each task;
+* define deterministic validation;
+* identify unresolved blockers.
+
+The Planner must not rewrite the objective to match implementation convenience.
+
+Required outputs:
+
+* specification version;
+* requirements;
+* acceptance criteria;
+* task graph;
+* validation plan.
+
+## 6.7 Builder
+
+Purpose:
+
+* implement exactly one bounded task or explicitly grouped atomic task set;
+* inspect necessary repository context;
+* propose typed patch operations;
+* respond to concrete reviewer and verifier findings;
+* publish beliefs and uncertainties.
+
+The Builder must not:
+
+* approve or apply its own patch;
+* weaken tests to hide failure;
+* expand scope silently;
+* rewrite requirements;
+* mark itself complete based only on plausibility.
+
+## 6.8 Verifier
+
+Purpose:
+
+* independently derive requirement-level verification;
+* run approved deterministic checks;
+* generate independent tests when needed;
+* detect test gaming;
+* inspect actual evidence;
+* distinguish implementation presence from correct behavior.
+
+The Verifier should not receive unnecessary Builder commentary before independently deriving its verification plan.
+
+Required output:
+
+```json
+{
+  "verdict": "PASS",
+  "requirementEvidence": [],
+  "missingEvidence": [],
+  "failures": [],
+  "suspectedTestGaming": [],
+  "recommendedNextAction": "REVIEW"
+}
+```
+
+## 6.9 Reviewer
+
+Purpose:
+
+* compare the frozen specification, ADR, UX Contract, final diff, agent beliefs, and verification evidence;
+* identify gaps;
+* issue a bounded verdict.
+
+Allowed verdicts:
+
+* `PASS`
+* `REVISE`
+* `REPLAN`
+* `BLOCKED`
+
+Every finding must reference at least one stable requirement, constraint, assumption, ADR, task, or UX acceptance ID.
+
+Vague instructions such as “improve the implementation” are invalid.
+
+---
+
+# 7. Orchestration loop
+
+Implement a persisted, resumable state machine.
+
+The normal delivery loop is:
+
+```text
+User prompt or promoted Dream
+  → FDE discovery
+  → Dreamer alternatives when applicable
+  → Skeptic challenge
+  → UX concepts and contract
+  → architecture alternatives
+  → approved objective/spec boundary
+  → Planner task graph
+  → scope approval
+  → isolated implementation workspace
+  → Builder task
+  → typed-operation validation
+  → approval according to active policy
+  → transactional apply
+  → governed validation
+  → independent Verifier
+  → Reviewer
+      PASS    → next task or final candidate
+      REVISE  → targeted Builder feedback
+      REPLAN  → Planner/FDE/Architect as appropriate
+      BLOCKED → human or designated role intervention
+  → final UX review
+  → final FDE outcome-alignment review
+  → proof-carrying change set
+  → human merge review
+```
+
+## 7.1 Frozen specifications
+
+Once implementation begins, a specification version is immutable.
+
+Corrections create a new version.
+
+A `REVISE` verdict does not modify the spec.
+
+A `REPLAN` verdict creates a proposed new version and explains:
+
+* what evidence invalidated the current plan;
+* which requirements or assumptions changed;
+* what tasks are invalidated;
+* whether applied work remains valid;
+* whether rollback is required.
+
+## 7.2 Completion rule
+
+An initiative may become implementation-complete only when:
+
+* every required task passed;
+* all mandatory validation commands passed;
+* every approved requirement has sufficient evidence;
+* no blocking verifier finding remains;
+* no blocking reviewer finding remains;
+* no blocking UX finding remains;
+* no blocking architecture-conformance finding remains;
+* the final diff remains inside approved scope;
+* the active spec and ADR versions match the reviewed versions;
+* the worktree is clean except for the proposed change set;
+* budget limits were not exceeded;
+* the proof-carrying report was generated.
+
+Implementation completion must remain distinct from outcome confirmation.
+
+## 7.3 No-progress detection
+
+Stop automatic repair and transition to `BLOCKED` or `REPLAN` when any configured condition occurs, including:
+
+* the same blocking finding repeats three times;
+* the same files are repeatedly changed and reverted;
+* a test alternates between pass and failure across iterations;
+* diff size grows without increased requirement coverage;
+* no requirement gains evidence across the configured event window;
+* the Builder repeatedly violates the same ADR;
+* the Builder modifies unrelated files;
+* validation score fails to improve;
+* repeated patches recreate behavior previously rejected;
+* the task exceeds its iteration, time, file, or compute budget.
+
+Provide a visible explanation.
+
+Never implement an immortal loop.
+
+## 7.4 Independent contexts
+
+Each role receives:
+
+* approved role instructions;
+* relevant business context;
+* relevant requirements;
+* relevant ADRs;
+* relevant UX Contract sections;
+* relevant task state;
+* necessary repository excerpts;
+* evidence and findings relevant to its decision.
+
+Do not provide every agent with every prior transcript.
+
+Do not expose private model reasoning.
+
+Persist exact context bundles for auditability.
+
+## 7.5 Context handoff
+
+Agents share work through validated artifacts, beliefs, questions, answers, findings, and evidence.
+
+Do not treat natural-language conversation history as the authoritative project state.
+
+The authoritative state is the backend-owned structured project record.
+
+---
+
+# 8. Product modes
+
+## 8.1 Assist Mode
+
+Preserve all current local agent, patch, diff, approval, task, terminal, Git, runtime, and audit workflows.
+
+Assist Mode is the current direct human-to-agent workflow.
+
+Existing users must not be forced into multi-role orchestration.
+
+All current Fake Runtime paths must remain available for deterministic QA.
+
+## 8.2 Studio Mode
+
+Studio Mode begins with a user prompt.
+
+Example:
+
+> Add project-wide safe symbol rename.
+
+Studio Mode must support:
+
+1. FDE problem framing.
+2. Dreamer alternative goal interpretations where useful.
+3. Skeptic challenge.
+4. UX concept generation.
+5. Declarative prototype rendering.
+6. Architecture alternatives.
+7. Versioned spec and task graph.
+8. Human scope approval.
+9. Builder/Verifier/Reviewer execution.
+10. UX and FDE final review.
+11. Proof-carrying final change set.
+
+Provide an option to stop after concept generation without implementing code.
+
+Provide an option to approve the concept and proceed to an isolated implementation workspace.
+
+## 8.3 Dream Mode
+
+Dream Mode operates under a human-approved standing mandate.
+
+It may run repeated bounded cycles while:
+
+* Dream Mode is enabled;
+* the application is running;
+* a valid mandate exists;
+* budgets remain;
+* the user has not paused it;
+* the active repository meets safety checks.
+
+Do not create an OS background daemon in the initial implementation.
+
+Do not silently run when the app is closed.
+
+### Level 1: Ideation
+
+Allowed:
+
+* observe persisted product evidence;
+* generate Dream Contracts;
+* deduplicate ideas;
+* run FDE and Skeptic evaluation;
+* create UX contracts and declarative prototypes;
+* create architecture sketches;
+* place candidates in Dream Inbox.
+
+Forbidden:
+
+* repository modifications;
+* package installation;
+* commands that modify files;
+* worktree creation unless separately approved.
+
+### Level 2: Prototype
+
+Allowed under explicit mandate:
+
+* create a backend-governed disposable Git worktree;
+* implement a bounded proof of concept;
+* use fake data;
+* run approved local build/test commands;
+* generate prototype evidence;
+* iterate within budgets.
+
+Forbidden:
+
+* active working-tree modification;
+* active branch merge;
+* network by default;
+* credentials;
+* real user data;
+* package installation unless the mandate explicitly allows a separately governed installation workflow;
+* publishing externally.
+
+### Level 3: Incubator
+
+Allowed only when explicitly enabled:
+
+* continue bounded evidence-based improvement of an approved prototype;
+* run Builder/Verifier/Reviewer loops;
+* compare alternatives;
+* create a final candidate.
+
+Still forbidden:
+
+* autonomous merge;
+* push;
+* release;
+* deployment;
+* mutation of the user’s active working tree;
+* modification of the governing mandate.
+
+Dream Mode must favor learning over feature quantity.
+
+## 8.4 Dream Inbox
+
+Create a first-class Dream Inbox displaying:
+
+* title;
+* horizon;
+* observed problem;
+* supporting evidence;
+* proposed future;
+* interactive UX prototype;
+* expected value;
+* counterarguments;
+* assumptions;
+* cost;
+* reversibility;
+* Skeptic verdict;
+* FDE recommendation;
+* architecture implications;
+* smallest experiment;
+* current status.
+
+User actions:
+
+* reject;
+* archive;
+* request revision;
+* promote to Studio goal;
+* approve prototype experiment;
+* compare with another dream.
+
+A Dream candidate must never be presented as an approved roadmap commitment until promoted.
+
+---
+
+# 9. Safe isolated workspaces
+
+Implement a backend-owned worktree manager.
+
+The model must not run arbitrary Git worktree commands.
+
+Required capabilities:
+
+* inspect current Git state;
+* refuse unsafe creation conditions;
+* create a uniquely named isolated worktree;
+* bind it to initiative ID and approved base commit;
+* persist path and branch metadata;
+* ensure all automated patches target that worktree;
+* validate paths through RepoGuard-equivalent policy;
+* report worktree status;
+* compute consolidated diff;
+* clean up only after safety confirmation;
+* retain audit history after cleanup;
+* prevent merge through the model protocol.
+
+The active user branch remains untouched by Dream implementation.
+
+The final output is a reviewable candidate diff.
+
+Merge authority is always human-only.
+
+Test:
+
+* path traversal;
+* symlink escape;
+* wrong-repository binding;
+* stale base commit;
+* dirty active tree;
+* duplicate branch/worktree names;
+* cleanup of the wrong path;
+* frontend-supplied path substitution;
+* model-supplied Git command bypass.
+
+---
+
+# 10. Proof-carrying change sets
+
+Create a final report connecting:
+
+```text
+Business objective
+  → user or operational problem
+  → outcome hypothesis
+  → assumptions
+  → constraints and non-goals
+  → requirements
+  → UX acceptance criteria
+  → architecture decision
+  → implementation tasks
+  → typed operations and patch hashes
+  → validation evidence
+  → reviewer findings and resolutions
+  → final diff
+  → remaining risks
+  → outcome measurement plan
+```
+
+The report must be generated from persisted records, not reconstructed solely from an LLM summary.
+
+Include:
+
+* complete;
+* incomplete;
+* deferred;
+* blocked;
+* unverified;
+* outcome pending.
+
+Expose the report in the UI and allow a local structured export.
+
+Do not export full sensitive context bundles by default.
+
+---
+
+# 11. Pulse: hybrid temporal coordination system
+
+Implement **Synthesize Pulse**.
+
+Pulse has two distinct responsibilities:
+
+1. Symbolic monitors establish explicit facts and rule violations.
+2. A temporal observer identifies evolving patterns and emerging risk.
+
+The temporal observer is not an authority.
+
+It cannot:
+
+* verify requirements;
+* approve patches;
+* approve commands;
+* change scope;
+* modify ADRs;
+* apply code;
+* merge;
+* override a deterministic policy;
+* suppress a deterministic violation.
+
+## 11.1 Timestamped event stream
+
+Every meaningful orchestration event must be recorded with:
+
+* event ID;
+* initiative ID;
+* task ID when applicable;
+* actor role;
+* event kind;
+* timestamp;
+* related requirement IDs;
+* related ADR IDs;
+* related assumption IDs;
+* relevant numeric features;
+* provenance;
+* redacted human-readable summary.
+
+Event examples:
+
+* requirement approved;
+* assumption invalidated;
+* task started;
+* patch proposed;
+* patch rejected;
+* patch applied;
+* test passed;
+* test failed;
+* reviewer finding;
+* belief published;
+* question opened;
+* question answered;
+* scope expanded;
+* rollback;
+* no progress;
+* budget warning.
+
+## 11.2 Symbolic monitors
+
+Implement deterministic detectors for at least:
+
+* intent drift;
+* requirement drift;
+* constraint drift;
+* architecture drift;
+* assumption invalidation;
+* scope drift;
+* value drift indicators;
+* repeated failure;
+* diff churn;
+* regression after prior success;
+* test deletion after failure;
+* test weakening suspicion;
+* repeated ADR violation;
+* agent belief divergence;
+* unresolved blocking question;
+* budget pressure;
+* stagnation;
+* oscillation;
+* unauthorized path attempt;
+* evidence regression.
+
+Symbolic monitors produce evidence-backed findings.
+
+## 11.3 Requirement checkboxes
+
+Requirement and architecture status indicators are computed from authoritative records and evidence.
+
+The temporal observer must not directly check them.
+
+## 11.4 Belief divergence
+
+Compare role belief snapshots.
+
+Detect discrepancies such as:
+
+* Builder says requirement complete while Verifier says evidence missing.
+* Architect says ADR violated while Builder says followed.
+* UX says a state is missing while Planner marks UX acceptance complete.
+* FDE and Builder disagree about scope.
+* Reviewer confidence rises while deterministic evidence decreases.
+
+Create an alignment intervention when divergence exceeds configurable thresholds.
+
+## 11.5 Temporal observer interface
+
+Create a backend trait or equivalent abstraction:
+
+```text
+TemporalObserver
+  ingest(event, delta_time)
+  current_state()
+  evaluate()
+  reset()
+  snapshot()
+  restore()
+  model_metadata()
+```
+
+Implement two observers:
+
+### Rule-based temporal observer
+
+Production default.
+
+Uses deterministic rolling windows, decay, trends, and thresholds.
+
+### Liquid temporal observer
+
+Experimental, feature-flagged, shadow-only by default.
+
+Implement a small native continuous-time recurrent observer inspired by liquid time-constant or closed-form continuous-time networks.
+
+It must:
+
+* update hidden state using elapsed time between irregular events;
+* load versioned local weights and normalization metadata;
+* be deterministic for fixed input, state, weights, and timestamps;
+* expose model version and checksum;
+* support snapshot and restore;
+* output calibrated risk-head values only when a calibrated model is loaded;
+* refuse active intervention authority when weights are absent, invalid, uncalibrated, or incompatible;
+* never download weights;
+* never require a cloud service;
+* never present random weights as useful predictions.
+
+A suitable internal update may use a bounded continuous-time interpolation such as:
+
+```text
+alpha = 1 - exp(-delta_time / positive_time_constant(input))
+candidate = tanh(W_input * input + W_state * state + bias)
+new_state = (1 - alpha) * state + alpha * candidate
+```
+
+The implementation must document that exact mathematical behavior and must not falsely claim to be a particular published architecture unless it faithfully implements that architecture.
+
+Output heads should cover:
+
+* intent-alignment risk;
+* architecture risk;
+* coordination deterioration;
+* stagnation;
+* scope pressure;
+* contradiction pressure;
+* rework/churn;
+* verification health;
+* intervention urgency.
+
+## 11.6 Shadow mode
+
+In shadow mode:
+
+* predictions are recorded;
+* predictions are visible as experimental;
+* predictions do not interrupt agents;
+* predictions are compared with subsequent actual outcomes;
+* false positive, false negative, calibration, and lead-time data are exportable.
+
+Provide a local JSONL trajectory export with privacy warnings.
+
+Provide:
+
+* event schema;
+* label schema;
+* model metadata schema;
+* weight import validation;
+* an evaluation harness;
+* deterministic fixture trajectories.
+
+Do not require a full training pipeline to enable the production application.
+
+The production application must remain useful without learned weights.
+
+## 11.7 Explainable signals
+
+Never show a naked opaque score as the only explanation.
+
+A Pulse signal must include:
+
+```json
+{
+  "kind": "coordination_deterioration",
+  "severity": 0.81,
+  "trend": "rising",
+  "source": "rule_based",
+  "experimental": false,
+  "primaryFactors": [
+    "repeated_cross_requirement_regression",
+    "increasing_diff_churn",
+    "declining_verification_coverage"
+  ],
+  "relatedRequirements": ["REQ-014", "REQ-018"],
+  "supportingEvents": ["EVENT-...", "EVENT-..."],
+  "recommendedIntervention": "cross_role_alignment_review"
+}
+```
+
+## 11.8 Intervention router
+
+Allowed proposed interventions:
+
+* `ASK_FDE`
+* `ASK_UX`
+* `ASK_ARCHITECT`
+* `ASK_PLANNER`
+* `ASK_VERIFIER`
+* `REQUEST_EVIDENCE`
+* `REQUEST_ALIGNMENT_REVIEW`
+* `REQUEST_REPLAN`
+* `LOWER_AUTONOMY`
+* `PAUSE_TASK`
+* `PAUSE_INITIATIVE`
+* `ESCALATE_TO_HUMAN`
+
+The trusted backend decides whether the intervention is valid.
+
+The observer cannot directly invoke a model or mutate lifecycle state without the router.
+
+---
+
+# 12. Agent protocol extensions
+
+Extend the typed protocol through backward-compatible structured operations or artifact envelopes.
+
+Do not force every artifact into a patch operation.
+
+Support concepts equivalent to:
+
+* `propose_artifact`
+* `publish_belief`
+* `ask_agent`
+* `answer_agent`
+* `report_finding`
+* `request_transition`
+* `request_context`
+* `final_report`
+
+Every operation must include:
+
+* operation ID;
+* initiative ID;
+* role;
+* artifact or payload type;
+* schema version;
+* reason;
+* expected outcome;
+* source context bundle ID where applicable.
+
+Backend validation must enforce:
+
+* role permissions;
+* lifecycle state;
+* artifact schema;
+* initiative binding;
+* task binding;
+* spec version;
+* budget;
+* allowed transition;
+* sensitive-data handling.
+
+A model’s `request_transition` is a proposal. The backend performs the actual transition only after policy validation.
+
+Maintain compatibility with existing patch operations and Fake Runtime fixtures.
+
+---
+
+# 13. Prompt and context architecture
+
+Implement role prompts as versioned, testable templates.
+
+Do not scatter large prompt strings across UI components or Tauri commands.
+
+Each role prompt must define:
+
+* role purpose;
+* allowed artifact types;
+* forbidden actions;
+* authoritative inputs;
+* output schema;
+* evidence expectations;
+* escalation behavior;
+* completion criteria.
+
+Create prompt compiler tests that ensure:
+
+* security invariant is present;
+* role scope is present;
+* output schema is present;
+* exact spec version is included;
+* unrelated sensitive business context is absent;
+* model is instructed not to expose private chain-of-thought;
+* model is instructed to emit concise decision rationale only.
+
+The context broker must support:
+
+* relevance selection;
+* maximum context budgets;
+* stable artifact summaries;
+* exact source references;
+* per-role redaction;
+* deterministic ordering;
+* persisted exact context visibility.
+
+---
+
+# 14. Frontend experience
+
+Create a coherent interface integrated with the existing workbench.
+
+Do not destroy current IDE functionality.
+
+## 14.1 Mode navigation
+
+Provide clear access to:
+
+* Assist
+* Studio
+* Dream
+
+The active mode must be obvious.
+
+Autonomy level and active worktree must always be visible when automation is running.
+
+## 14.2 Initiative workspace
+
+Create a workspace with sections equivalent to:
+
+* Overview
+* Intent
+* Dreams
+* UX
+* Architecture
+* Plan
+* Team
+* Pulse
+* Evidence
+* Changes
+
+### Overview
+
+Show:
+
+* objective;
+* initiative state;
+* current phase;
+* active role;
+* current task;
+* progress;
+* blockers;
+* budget;
+* active spec version;
+* worktree identity.
+
+### Intent
+
+Show a navigable relationship graph or structured hierarchy for:
+
+* objective;
+* outcome hypothesis;
+* assumptions;
+* constraints;
+* non-goals;
+* requirements;
+* ADRs;
+* evidence.
+
+A simple trustworthy initial visualization is preferable to an unstable graph library.
+
+### UX
+
+Show:
+
+* user journey;
+* UX Contract;
+* state list;
+* interactive declarative prototype;
+* unresolved questions;
+* UX findings.
+
+### Architecture
+
+Show:
+
+* alternatives;
+* comparison;
+* selected ADR;
+* consequences;
+* conformance findings.
+
+### Plan
+
+Show:
+
+* task dependency list or graph;
+* statuses;
+* acceptance criteria;
+* assigned role;
+* iteration count;
+* required validation.
+
+### Team
+
+Show a timestamped, filterable timeline of:
+
+* role invocations;
+* artifacts;
+* beliefs;
+* questions;
+* answers;
+* findings;
+* transitions;
+* interventions.
+
+Do not label summaries as chain-of-thought.
+
+### Pulse
+
+Show:
+
+* deterministic findings;
+* temporal trends;
+* experimental liquid-observer signals;
+* belief divergence;
+* progress velocity;
+* churn;
+* unresolved contradiction;
+* interventions;
+* model metadata.
+
+### Evidence
+
+Show requirement-by-requirement evidence and missing proof.
+
+### Changes
+
+Reuse the governed diff and patch lifecycle.
+
+Show the link from each patch to its task, requirement, ADR, and context bundle.
+
+## 14.3 Controls
+
+Provide:
+
+* start;
+* pause;
+* resume;
+* stop;
+* abandon;
+* approve scope;
+* approve prototype worktree;
+* lower autonomy;
+* request alignment review;
+* promote Dream;
+* reject Dream;
+* review final candidate.
+
+Controls must call backend commands and display backend-returned state.
+
+## 14.4 Accessibility and resilience
+
+Ensure:
+
+* keyboard navigation;
+* focus visibility;
+* semantic controls;
+* status not conveyed only by color;
+* loading states;
+* empty states;
+* error recovery;
+* long-output truncation with explicit expansion;
+* no blocking UI while long agent runs execute;
+* recoverable state after application restart.
+
+---
+
+# 15. Runtime scheduling
+
+Local hardware may support only one large model efficiently.
+
+Implement a role scheduler that:
+
+* serializes calls by default;
+* prevents accidental simultaneous loading of multiple managed large models;
+* supports one shared endpoint;
+* optionally supports per-role endpoint/model override;
+* records runtime and model provenance;
+* handles cancellation;
+* handles timeout;
+* restores initiative state after failure;
+* avoids holding database locks during model inference.
+
+Do not introduce a requirement for cloud APIs.
+
+Fake Runtime must support deterministic multi-role fixtures.
+
+---
+
+# 16. Security requirements
+
+Update the threat model for:
+
+* autonomous role loops;
+* malicious repository instructions;
+* prompt injection in code or test output;
+* role impersonation;
+* forged artifact IDs;
+* forged verification evidence;
+* model-requested scope expansion;
+* worktree path substitution;
+* stale spec execution;
+* replayed approval;
+* budget bypass;
+* prototype script execution;
+* Dream Mode running against the wrong repository;
+* neural signal manipulation;
+* agent collusion or circular agreement;
+* test gaming;
+* context leakage between roles;
+* sensitive business-context overexposure;
+* denial of service through infinite loops or giant artifacts.
+
+Required mitigations:
+
+* backend-owned identity and lifecycle;
+* schema validation;
+* source context binding;
+* spec-version binding;
+* operation hashes;
+* role permission checks;
+* artifact size limits;
+* loop budgets;
+* timeout and cancellation;
+* evidence provenance;
+* immutable historical records;
+* worktree binding;
+* explicit standing mandate;
+* human-only merge;
+* no arbitrary prototype execution;
+* learned observer has no authority;
+* deterministic rules override neural optimism;
+* complete audit events for interventions and transitions.
+
+Maintain the existing honest limitation language regarding OS-level sandboxing and network isolation.
+
+Do not claim security properties the implementation does not provide.
+
+---
+
+# 17. Testing requirements
+
+Testing is part of the implementation, not a final afterthought.
+
+## 17.1 Unit tests
+
+Add thorough tests for:
+
+* domain serialization;
+* enum compatibility;
+* migration ordering;
+* migration idempotence;
+* initiative transitions;
+* requirement transitions;
+* Dream lifecycle;
+* task lifecycle;
+* verdict routing;
+* role permissions;
+* artifact validation;
+* spec-version binding;
+* mandate enforcement;
+* budgets;
+* no-progress detection;
+* repeated-finding detection;
+* diff-churn calculation;
+* belief divergence;
+* each deterministic drift detector;
+* intervention routing;
+* worktree path checks;
+* context selection and redaction;
+* prompt compilation;
+* declarative prototype schema;
+* liquid-observer elapsed-time updates;
+* liquid-observer snapshot/restore;
+* liquid weight checksum and compatibility;
+* refusal of uncalibrated active mode;
+* proof-report generation.
+
+## 17.2 Migration tests
+
+Test upgrading from a database containing the current schema and representative records.
+
+Existing sessions, patches, approvals, checkpoints, commands, and context bundles must remain readable.
+
+## 17.3 Integration tests
+
+Use temporary repositories and databases.
+
+Required scenarios:
+
+1. Prompted Studio initiative reaches approved spec.
+2. Builder proposes a patch; backend validates and applies it.
+3. Verifier fails the task; targeted revision is generated.
+4. Builder repairs; task passes.
+5. Reviewer requests replan after assumption invalidation.
+6. New spec version is created without mutating the old version.
+7. Dream idea is generated and rejected without code changes.
+8. Dream prototype runs only in an isolated worktree.
+9. Active branch remains untouched.
+10. Merge cannot be triggered by an agent.
+11. Budget exhaustion pauses the initiative.
+12. Repeated failure triggers no-progress intervention.
+13. Belief divergence triggers an alignment question.
+14. Rule-based Pulse signal includes evidence.
+15. Liquid observer records shadow prediction without changing state.
+16. Application restart resumes a paused initiative.
+17. Invalid artifact or forged initiative ID is rejected.
+18. Existing Assist Mode patch workflow still works.
+
+## 17.4 Frontend tests
+
+The repository currently may rely heavily on type-checking. Introduce an appropriate lightweight frontend test setup when necessary and justified.
+
+Test:
+
+* mode switching;
+* initiative rendering;
+* Dream Inbox actions;
+* declarative UX interactions;
+* backend-returned state over optimistic local state;
+* Team timeline filtering;
+* evidence status;
+* Pulse experimental labeling;
+* pause/resume controls;
+* error and empty states.
+
+Do not add a large test dependency without documenting the rationale.
+
+## 17.5 Fake Runtime scenarios
+
+Extend Fake Runtime with deterministic outputs for all roles.
+
+Include:
+
+* successful full Studio flow;
+* reviewer revision;
+* replan;
+* blocking question;
+* Dream rejection;
+* prototype promotion;
+* drift signal;
+* budget stop;
+* malformed artifact;
+* role-permission violation.
+
+## 17.6 Release validation
+
+At completion, run:
+
+```text
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Run repository-specific release checks and documented smoke tests.
+
+No completion claim is allowed while a newly introduced failure remains.
+
+---
+
+# 18. Implementation phases
+
+## Phase 0: Baseline and design
+
+Deliver:
+
+* repository assessment;
+* baseline;
+* repository-specific spec;
+* data model;
+* state machines;
+* security model;
+* test plan;
+* implementation plan.
+
+Then continue.
+
+## Phase 1: Modular foundation and migrations
+
+Deliver:
+
+* extracted backend modules;
+* schema versioning;
+* migrations;
+* initiative/artifact repositories;
+* domain state machines;
+* thin Tauri adapters;
+* no regression to existing workflows.
+
+Do not add new orchestration logic directly into the existing monolithic entry point beyond registration/wiring.
+
+## Phase 2: Role profiles and context broker
+
+Deliver:
+
+* all required roles;
+* role permissions;
+* versioned prompt templates;
+* structured output schemas;
+* context selection;
+* isolated agent-run persistence;
+* beliefs;
+* questions and answers;
+* Fake Runtime role fixtures.
+
+## Phase 3: Studio orchestration
+
+Deliver:
+
+* initiative creation from prompt;
+* FDE;
+* Dreamer alternatives;
+* Skeptic;
+* UX Contract;
+* architecture alternatives;
+* spec generation;
+* human scope approval;
+* task graph;
+* Builder/Verifier/Reviewer loop;
+* bounded retry;
+* replan;
+* blocked state;
+* resume after restart.
+
+## Phase 4: UX prototype system
+
+Deliver:
+
+* declarative schema;
+* backend validation;
+* trusted renderer;
+* fake data/state transitions;
+* UX acceptance criteria;
+* post-implementation UX conformance workflow.
+
+## Phase 5: Isolated workspaces and proof reports
+
+Deliver:
+
+* backend-owned worktree lifecycle;
+* initiative/worktree binding;
+* candidate diff;
+* human-only merge boundary;
+* proof-carrying change report;
+* export with sensitive-data safeguards.
+
+## Phase 6: Dream Mode
+
+Deliver:
+
+* standing mandate;
+* Ideation level;
+* Dream Inbox;
+* deduplication;
+* FDE/Skeptic scoring;
+* prototype promotion;
+* Prototype level;
+* bounded Incubator level;
+* pause/resume/stop;
+* no active branch modification;
+* no autonomous merge.
+
+## Phase 7: Pulse
+
+Deliver:
+
+* event feature extraction;
+* deterministic detectors;
+* beliefs divergence;
+* trends;
+* intervention router;
+* rule-based temporal observer;
+* experimental liquid temporal observer;
+* shadow evaluation;
+* UI dashboard;
+* tests.
+
+## Phase 8: Hardening and documentation
+
+Deliver:
+
+* threat-model update;
+* privacy and retention update;
+* known-limitations update;
+* architecture update;
+* agent-protocol update;
+* operator guide;
+* Dream Mode guide;
+* Studio Mode guide;
+* Pulse guide;
+* migration notes;
+* full release validation;
+* manual QA checklist.
+
+---
+
+# 19. Required documentation
+
+Create or update documentation covering:
+
+* product concept;
+* architecture;
+* role responsibilities;
+* role permission matrix;
+* orchestration lifecycle;
+* intent and evidence model;
+* requirement state machine;
+* task state machine;
+* Dream lifecycle;
+* standing mandates;
+* UX Contract schema;
+* declarative prototype security;
+* worktree isolation;
+* proof-carrying change sets;
+* Pulse symbolic monitors;
+* liquid observer limitations;
+* context isolation;
+* privacy and retention;
+* threat model;
+* troubleshooting;
+* recovery after interruption;
+* current limitations.
+
+Explicitly document:
+
+* Dream Mode does not merge autonomously.
+* Continuous operation means repeated bounded cycles while enabled and while the application is running.
+* The experimental liquid observer does not establish truth.
+* Requirements are checked through evidence and state machines.
+* Model quality depends on the configured runtime.
+* OS-level sandboxing and complete network isolation are not claimed unless actually implemented.
+* A clean branch and backups remain recommended.
+
+---
+
+# 20. Acceptance criteria
+
+The implementation is complete only when all of the following are true.
+
+## Existing product
+
+* Existing Assist workflow remains functional.
+* Existing local runtime modes remain functional.
+* Existing patch validation, approval, apply, rollback, task, terminal, Git, and audit behavior remains functional.
+* Existing security invariants are not weakened.
+
+## Roles
+
+* Every required role exists as a separate profile.
+* Every role has validated structured outputs.
+* Every role has explicit permissions and prohibitions.
+* Every role invocation is persisted and visible.
+* Roles communicate through artifacts, beliefs, and questions.
+
+## Studio
+
+* A user prompt can create an initiative.
+* The system produces FDE framing, assumptions, UX Contract, architecture alternatives, specification, and task graph.
+* A user can approve scope.
+* The implementation loop can execute through Builder, Verifier, and Reviewer.
+* `REVISE`, `REPLAN`, `BLOCKED`, and `PASS` are operational.
+* No-progress logic stops non-converging work.
+* A final proof-carrying report is produced.
+
+## UX
+
+* The UX role produces a validated declarative prototype.
+* The prototype is interactive using fake local state.
+* It cannot execute arbitrary code or access privileged APIs.
+* UX acceptance criteria are linked to implementation evidence.
+* UX can issue post-implementation findings.
+
+## Dream
+
+* Dream Mode requires a standing mandate.
+* Ideation can run without changing code.
+* Candidates enter Dream Inbox.
+* Candidates can be rejected or promoted.
+* Prototype implementation occurs only in an isolated worktree.
+* Budgets are enforced.
+* Active branch and merge remain human-controlled.
+* Dream operation can be paused and resumed safely.
+
+## Intent and evidence
+
+* Objectives, assumptions, constraints, requirements, ADRs, tasks, operations, and evidence are persistently linked.
+* Invalidated assumptions are visible.
+* Requirements cannot become verified without evidence.
+* Historical spec versions remain immutable.
+
+## Pulse
+
+* Deterministic drift monitors work.
+* Belief divergence works.
+* Pulse interventions are bounded proposals.
+* Rule-based temporal monitoring is the production default.
+* The experimental liquid observer updates by elapsed time and supports snapshot/restore.
+* Uncalibrated liquid weights cannot enable active authority.
+* Neural outputs are clearly labeled experimental.
+* Pulse never approves or verifies work.
+
+## Security
+
+* Worktree operations are backend owned.
+* Models cannot forge lifecycle state.
+* Models cannot merge.
+* Models cannot bypass typed operations.
+* Models cannot run arbitrary shell commands.
+* Generated UX cannot execute arbitrary code in the trusted UI.
+* Standing-mandate and budget bypasses are tested.
+* Existing threat-model honesty is preserved.
+
+## Quality
+
+* Backend domain logic is modular.
+* Tauri commands are thin adapters.
+* React feature logic is modular.
+* No new giant entry-point concentration is introduced.
+* Migrations preserve current data.
+* Fake Runtime covers major flows.
+* All required validation commands pass.
+
+---
+
+# 21. Final completion report
+
+When implementation is finished, provide a concise but complete report containing:
+
+1. Repository baseline.
+2. Architecture implemented.
+3. New crates/modules and their responsibilities.
+4. Database migrations.
+5. Roles implemented.
+6. Modes implemented.
+7. Orchestration lifecycle.
+8. UX prototype safety model.
+9. Worktree isolation behavior.
+10. Pulse symbolic behavior.
+11. Liquid-observer implementation and honest limitations.
+12. Security controls.
+13. Tests added.
+14. Commands run and exact outcomes.
+15. Manual QA still required.
+16. Known limitations.
+17. Files changed.
+18. Any acceptance criterion not completed.
+
+Do not state “all requirements complete” unless every acceptance criterion above has evidence.
+
+When blocked by a real environmental limitation, complete every unaffected vertical slice, document the exact blocker, leave the repository in a passing state, and provide the precise next executable action. Do not substitute vague future-work notes for implementation that is possible in the current environment.
+
+Begin now with repository reconnaissance and baseline validation. Continue through implementation rather than stopping after the plan.

@@ -11,6 +11,10 @@ Synthesize is security-conscious but does not claim enterprise production securi
 - Personal Terminal with strict explicit-rule-only command policy.
 - Agent-suggested commands are classification-only.
 - Command execution is argv-only, repo-bounded, timeout-bounded, env-scrubbed, output-bounded, reclassified, and audited.
+- Studio state changes, role permissions, task/spec/context bindings, evidence gates, and autonomy budgets are backend-enforced.
+- Dream prototypes are restricted to governed sibling worktrees; active-branch writes and autonomous merge are forbidden.
+- Declarative UX prototypes contain no executable HTML, script, import, filesystem, command, or network capability.
+- Pulse observers are advisory; experimental signals cannot directly route an intervention.
 
 ## Personal Terminal security stance
 
@@ -28,6 +32,8 @@ Blocked examples include `git add`, `git commit`, `git checkout`, `git pull`, `g
 - Extension sandboxing.
 - Remote development isolation.
 - Safe execution of untrusted repositories.
+- A cryptographic or OS sandbox for governed worktrees.
+- Autonomous Dream merge authority.
 
 ## Reporting issues
 

@@ -11,7 +11,11 @@ pub struct RunResult {
     pub timed_out: bool,
 }
 
-pub async fn run_argv(argv: &[String], cwd: &str, timeout_seconds: u64) -> anyhow::Result<RunResult> {
+pub async fn run_argv(
+    argv: &[String],
+    cwd: &str,
+    timeout_seconds: u64,
+) -> anyhow::Result<RunResult> {
     anyhow::ensure!(!argv.is_empty(), "argv cannot be empty");
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..])
@@ -32,6 +36,11 @@ pub async fn run_argv(argv: &[String], cwd: &str, timeout_seconds: u64) -> anyho
                 timed_out: false,
             })
         }
-        Err(_) => Ok(RunResult { exit_code: None, stdout: String::new(), stderr: "process timed out".into(), timed_out: true })
+        Err(_) => Ok(RunResult {
+            exit_code: None,
+            stdout: String::new(),
+            stderr: "process timed out".into(),
+            timed_out: true,
+        }),
     }
 }

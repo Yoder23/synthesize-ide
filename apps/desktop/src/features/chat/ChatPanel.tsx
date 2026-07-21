@@ -73,6 +73,7 @@ export function ChatPanel(props: {
       return;
     }
 
+    const backendProvider = runtimeProviderForBackend(props.runtimeSettings.provider);
     setLoading(true);
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: task };
     setMessages((prev) => [...prev, userMessage]);
@@ -85,9 +86,16 @@ export function ChatPanel(props: {
           selected_file_path: props.repo.currentFilePath,
           selected_text: props.selectedText && props.selectedText.trim() ? props.selectedText : null,
           dirty_buffer_state: props.isDirty,
-          provider: props.runtimeSettings.provider === 'fake' ? 'fake' : 'local-server',
+          provider: backendProvider,
           endpoint_url: props.runtimeSettings.provider === 'fake' ? null : props.runtimeSettings.endpointUrl,
-          agent_profile_id: props.agentProfileId
+          agent_profile_id: props.agentProfileId,
+          model: props.runtimeSettings.provider === 'fake' ? 'fixture-patcher' : props.runtimeSettings.modelName,
+          context_window_tokens: props.runtimeSettings.contextWindowTokens,
+          maximum_output_tokens: props.runtimeSettings.maximumOutputTokens,
+          safety_margin_tokens: props.runtimeSettings.safetyMarginTokens,
+          token_estimation_method: props.runtimeSettings.tokenEstimationMethod,
+          structured_output_behavior: props.runtimeSettings.structuredOutputBehavior,
+          capability_source: props.runtimeSettings.capabilitySource
         }
       });
       props.onContextBuilt(context);
@@ -96,11 +104,11 @@ export function ChatPanel(props: {
         req: {
           session_id: SESSION_ID,
           repo_root: props.repo.repoRoot,
-          provider: props.runtimeSettings.provider === 'fake' ? 'fake' : 'local-server',
+          provider: backendProvider,
           endpoint_url: props.runtimeSettings.provider === 'fake' ? 'memory://fake-runtime' : props.runtimeSettings.endpointUrl,
           model: props.runtimeSettings.provider === 'fake' ? 'fixture-patcher' : props.runtimeSettings.modelName,
           temperature: 0.1,
-          max_tokens: 4096,
+          max_tokens: props.runtimeSettings.maximumOutputTokens,
           response_format: 'json_schema',
           context_bundle_id: context.context_bundle_id
         }
@@ -129,7 +137,7 @@ export function ChatPanel(props: {
   return (
     <div className="panel chatbox">
       <h3>{isMoaMode ? 'MoA Action Chat' : 'Agent Chat'}</h3>
-      <div className="small">Agent: {props.agentProfileId} · Runtime: {props.runtimeSettings.provider === 'fake' ? 'Fake Runtime' : props.runtimeSettings.provider === 'managed-llamacpp' ? `Managed llama.cpp · ${props.runtimeSettings.modelName || 'GGUF model'} · ${endpointClass}` : `Local Model Server · ${props.runtimeSettings.modelName || 'no model'} · ${endpointClass}`}</div>
+      <div className="small">Agent: {props.agentProfileId} · Runtime: {runtimeLabel(props.runtimeSettings.provider, props.runtimeSettings.modelName, endpointClass)}</div>
       {isMoaMode && (
         <div className="notice ok"><strong>MoA action mode</strong><div className="small">The local model plans and emits typed operations. MoA/Synthesize governance remains the actor: validate, approve, apply, rollback, and audit. This panel shows an action trace, not hidden chain-of-thought.</div></div>
       )}
@@ -168,6 +176,19 @@ export function ChatPanel(props: {
       </div>
     </div>
   );
+}
+
+function runtimeProviderForBackend(provider: 'fake' | 'local-server' | 'managed-llamacpp' | 'cloud-openai' | 'cloud-anthropic'): string {
+  if (provider === 'managed-llamacpp') return 'local-server';
+  return provider;
+}
+
+function runtimeLabel(provider: 'fake' | 'local-server' | 'managed-llamacpp' | 'cloud-openai' | 'cloud-anthropic', modelName: string, endpointClass: string): string {
+  if (provider === 'fake') return 'Fake Runtime';
+  if (provider === 'managed-llamacpp') return `Managed llama.cpp · ${modelName || 'GGUF model'} · ${endpointClass}`;
+  if (provider === 'cloud-openai') return `OpenAI Cloud · ${modelName || 'gpt-4o'} · ${endpointClass}`;
+  if (provider === 'cloud-anthropic') return `Anthropic Cloud · ${modelName || 'claude-sonnet'} · ${endpointClass}`;
+  return `Local Model Server · ${modelName || 'no model'} · ${endpointClass}`;
 }
 
 

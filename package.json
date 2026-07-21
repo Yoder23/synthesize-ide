@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "build": "pnpm -r build",
+    "demo:preflight": "powershell -ExecutionPolicy Bypass -File scripts/demo-preflight.ps1",
+    "demo:winning": "powershell -ExecutionPolicy Bypass -File scripts/moa-winning-demo.ps1",
     "desktop:dev": "pnpm --filter synthesize-ide-desktop dev",
     "desktop:tauri": "pnpm --filter synthesize-ide-desktop tauri dev",
     "moa:bridge": "python integrations/moa/synthesize_bridge.py",

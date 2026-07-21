@@ -12,6 +12,10 @@ Creative Apps
 
 Synthesize IDE is a local-first agentic coding workbench where models propose typed operations, but only a trusted backend can validate, approve, apply, roll back, and audit changes.
 
+## AI tooling disclosure
+
+This project was created with significant assistance from GitHub Copilot (GPT-5.3-Codex) during implementation and documentation. Final product and security decisions were made by the project author.
+
 ## Problem
 
 Most coding agents blur planning and execution. That makes behavior hard to inspect, hard to interrupt, and hard to roll back safely.
@@ -59,6 +63,7 @@ Synthesize IDE separates proposal from authority:
 ## Validation commands
 
 ```powershell
+./scripts/demo-preflight.ps1
 ./scripts/submission-check.ps1
 ```
 

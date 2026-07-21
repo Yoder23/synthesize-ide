@@ -11,6 +11,7 @@ import { CommandApproval } from '../features/commandApproval/CommandApproval';
 import { ContextVisibility } from '../features/chat/ContextVisibility';
 import { RepoExplorer } from '../features/repoExplorer/RepoExplorer';
 import { SessionLog } from '../features/sessionReplay/SessionLog';
+import { MissionControlPanel } from '../features/missionControl/MissionControlPanel';
 import { GitPanel } from '../features/gitPanel/GitPanel';
 import { SearchPanel } from '../features/searchPanel/SearchPanel';
 import { LspPanel } from '../features/lspPanel/LspPanel';
@@ -21,6 +22,9 @@ import { QuickOpen } from '../features/quickOpen/QuickOpen';
 import { SettingsPanel, type EditorSettings } from '../features/settingsPanel/SettingsPanel';
 import { ProblemsPanel } from '../features/problemsPanel/ProblemsPanel';
 import { ReadinessPanel } from '../features/readinessPanel/ReadinessPanel';
+import { SkillAgentPanel } from '../features/skillAgents/SkillAgentPanel';
+import { StudioWorkspace } from '../features/studio/StudioWorkspace';
+import { selectProductMode } from '../features/studio/studioModel.mjs';
 
 const sampleCode = `export function refreshToken() {\n  throw new Error("not implemented");\n}\n`;
 export const SESSION_ID = 'synthesize-session';
@@ -77,10 +81,16 @@ export type OperationEvent = {
 export type AuditEvent = { id: string; timestamp: string; kind: string; payload_json: string };
 
 export type RuntimeSettings = {
-  provider: 'fake' | 'local-server' | 'managed-llamacpp';
+  provider: 'fake' | 'local-server' | 'managed-llamacpp' | 'cloud-openai' | 'cloud-anthropic';
   endpointUrl: string;
   modelName: string;
   remoteConfirmed: boolean;
+  contextWindowTokens: number;
+  maximumOutputTokens: number;
+  safetyMarginTokens: number;
+  tokenEstimationMethod: 'conservative_utf8_bytes_div3';
+  structuredOutputBehavior: 'json_object' | 'json_schema' | 'prompt_only';
+  capabilitySource: string;
 };
 
 export type ContextBundleView = {
@@ -94,7 +104,19 @@ export type ContextBundleView = {
   endpoint_classification: 'local' | 'private-lan' | 'remote' | string;
   destination_warning: string;
   char_estimate: number;
+  runtime: string;
+  model: string;
+  model_context_window_tokens: number;
+  reserved_output_tokens: number;
+  safety_margin_tokens: number;
+  compiled_input_tokens: number;
+  remaining_capacity_tokens: number;
+  token_count_kind: string;
+  token_estimation_method: string;
   included: Array<{ kind: string; path?: string | null; chars: number; note: string }>;
+  omitted: Array<{ kind: string; path?: string | null; reason: string }>;
+  summaries_used: unknown[];
+  truncations: Array<{ kind: string; path?: string | null; original_chars: number; included_chars: number; reason: string }>;
   messages: Array<{ role: string; content: string }>;
   exact_prompt: string;
   messages_sha256: string;
@@ -113,9 +135,15 @@ export type FileMutationResult = { path: string; message: string; audit_event_id
 
 const defaultRuntimeSettings: RuntimeSettings = {
   provider: 'fake',
-  endpointUrl: 'http://localhost:8080/v1',
-  modelName: 'local-coder',
-  remoteConfirmed: false
+  endpointUrl: 'http://localhost:11434/v1',
+  modelName: 'qwen3-coder:latest',
+  remoteConfirmed: false,
+  contextWindowTokens: 32768,
+  maximumOutputTokens: 4096,
+  safetyMarginTokens: 1024,
+  tokenEstimationMethod: 'conservative_utf8_bytes_div3',
+  structuredOutputBehavior: 'json_schema',
+  capabilitySource: 'local-user-declaration'
 };
 
 const defaultEditorSettings: EditorSettings = { wordWrap: 'off', fontSize: 14, minimap: false, theme: 'vs-dark' };
@@ -135,13 +163,32 @@ function loadRuntimeSettings(): RuntimeSettings {
     const parsed = { ...defaultRuntimeSettings, ...JSON.parse(raw) } as Record<string, unknown>;
     const providerRaw = parsed.provider === 'openai-compatible' ? 'local-server' : parsed.provider;
     const provider: RuntimeSettings['provider'] = (
-      providerRaw === 'fake' || providerRaw === 'local-server' || providerRaw === 'managed-llamacpp'
+      providerRaw === 'fake'
+      || providerRaw === 'local-server'
+      || providerRaw === 'managed-llamacpp'
+      || providerRaw === 'cloud-openai'
+      || providerRaw === 'cloud-anthropic'
     ) ? providerRaw : 'local-server';
+    let endpointUrl = typeof parsed.endpointUrl === 'string' ? parsed.endpointUrl : defaultRuntimeSettings.endpointUrl;
+    let modelName = typeof parsed.modelName === 'string' ? parsed.modelName : defaultRuntimeSettings.modelName;
+    const looksLikeLegacyLocalServerDefault = provider === 'local-server'
+      && (endpointUrl.trim() === 'http://localhost:8080/v1' || endpointUrl.trim() === 'http://127.0.0.1:8080/v1')
+      && (modelName.trim() === '' || modelName === 'local-coder' || modelName === 'qwen2.5-coder');
+    if (looksLikeLegacyLocalServerDefault) {
+      endpointUrl = 'http://localhost:11434/v1';
+      modelName = 'qwen3-coder:latest';
+    }
     return {
       provider,
-      endpointUrl: typeof parsed.endpointUrl === 'string' ? parsed.endpointUrl : defaultRuntimeSettings.endpointUrl,
-      modelName: typeof parsed.modelName === 'string' ? parsed.modelName : defaultRuntimeSettings.modelName,
-      remoteConfirmed: Boolean(parsed.remoteConfirmed)
+      endpointUrl,
+      modelName,
+      remoteConfirmed: Boolean(parsed.remoteConfirmed),
+      contextWindowTokens: Number(parsed.contextWindowTokens) || defaultRuntimeSettings.contextWindowTokens,
+      maximumOutputTokens: Number(parsed.maximumOutputTokens) || defaultRuntimeSettings.maximumOutputTokens,
+      safetyMarginTokens: Number(parsed.safetyMarginTokens) || defaultRuntimeSettings.safetyMarginTokens,
+      tokenEstimationMethod: 'conservative_utf8_bytes_div3',
+      structuredOutputBehavior: parsed.structuredOutputBehavior === 'json_object' || parsed.structuredOutputBehavior === 'prompt_only' ? parsed.structuredOutputBehavior : 'json_schema',
+      capabilitySource: typeof parsed.capabilitySource === 'string' ? parsed.capabilitySource : defaultRuntimeSettings.capabilitySource
     };
   } catch {
     return defaultRuntimeSettings;
@@ -149,6 +196,10 @@ function loadRuntimeSettings(): RuntimeSettings {
 }
 
 export function App() {
+  const [productMode, setProductMode] = useState<'assist' | 'studio' | 'dream'>(() => {
+    const stored = localStorage.getItem('synthesize.productMode.v1') ?? 'assist';
+    return selectProductMode('assist', stored) as 'assist' | 'studio' | 'dream';
+  });
   const [content, setContent] = useState(sampleCode);
   const [repo, setRepo] = useState<RepoState | null>(null);
   const [repoPathInput, setRepoPathInput] = useState('');
@@ -181,6 +232,7 @@ export function App() {
 
   useEffect(() => { localStorage.setItem('synthesize.runtimeSettings.v2', JSON.stringify(runtimeSettings)); }, [runtimeSettings]);
   useEffect(() => { localStorage.setItem('synthesize.editorSettings.v1', JSON.stringify(editorSettings)); }, [editorSettings]);
+  useEffect(() => { localStorage.setItem('synthesize.productMode.v1', productMode); }, [productMode]);
 
   function addEvent(label: string, detail: string, status: OperationEvent['status'] = 'info') {
     setEvents((prev) => [...prev, { id: crypto.randomUUID(), label, detail, status }]);
@@ -244,11 +296,21 @@ export function App() {
   }
 
   async function hydrateRepo(result: RepoState) {
-    setRepo(result);
-    setRepoPathInput(result.repoRoot);
-    setContent(result.currentFileContent);
-    setTabs([{ path: result.currentFilePath, content: result.currentFileContent, diskContent: result.currentFileContent, dirty: false }]);
-    localStorage.setItem('synthesize.recentRepo.latest', result.repoRoot);
+    // Keep the renderer resilient to older/native payloads while the backend
+    // contract migrates to camelCase. A missing file body must never crash the
+    // entire workspace during startup.
+    const safeResult: RepoState = {
+      ...result,
+      repoRoot: typeof result.repoRoot === 'string' ? result.repoRoot : '',
+      currentFilePath: typeof result.currentFilePath === 'string' ? result.currentFilePath : 'untitled.ts',
+      currentFileContent: typeof result.currentFileContent === 'string' ? result.currentFileContent : sampleCode,
+      files: Array.isArray(result.files) ? result.files : []
+    };
+    setRepo(safeResult);
+    setRepoPathInput(safeResult.repoRoot);
+    setContent(safeResult.currentFileContent);
+    setTabs([{ path: safeResult.currentFilePath, content: safeResult.currentFileContent, diskContent: safeResult.currentFileContent, dirty: false }]);
+    localStorage.setItem('synthesize.recentRepo.latest', safeResult.repoRoot);
     setOperations([]);
     setValidationByProposal({});
     setApprovalByProposal({});
@@ -257,8 +319,8 @@ export function App() {
     setLastContextBundle(null);
     setProposalSourceByProposal({});
     setIsDirty(false);
-    setEvents([{ id: crypto.randomUUID(), label: 'repo.opened', detail: result.repoRoot, status: 'ok' }]);
-    await refreshAudit(result);
+    setEvents([{ id: crypto.randomUUID(), label: 'repo.opened', detail: safeResult.repoRoot, status: 'ok' }]);
+    await refreshAudit(safeResult);
   }
 
   async function openFixtureRepo() {
@@ -494,6 +556,16 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <strong>Synthesize IDE</strong>
+        <nav className="mode-switcher" aria-label="Product mode">
+          {(['assist', 'studio', 'dream'] as const).map((mode) => (
+            <button
+              key={mode}
+              className={productMode === mode ? 'active' : ''}
+              aria-pressed={productMode === mode}
+              onClick={() => setProductMode(selectProductMode(productMode, mode) as typeof productMode)}
+            >{mode.charAt(0).toUpperCase() + mode.slice(1)}</button>
+          ))}
+        </nav>
         <button className="primary" onClick={openFixtureRepo}>Open fixture repo</button>
         <input className="repo-input" placeholder="/path/to/your/repo" value={repoPathInput} onChange={(e) => setRepoPathInput(e.target.value)} />
         <button className="primary" onClick={openRepoPath}>Open local repo path</button>
@@ -504,7 +576,7 @@ export function App() {
         <span className="badge">File: {repo?.currentFilePath ?? 'none'}{isDirty ? ' · dirty' : ''}</span>
       </header>
       {error && <div className="global-error">{error}</div>}
-      <main className="layout">
+      {productMode === 'assist' ? <main className="layout">
         <aside className="sidebar">
           <RuntimeControl settings={runtimeSettings} onChange={setRuntimeSettings} repo={repo} />
           <AgentPanel selected={agentProfileId} onChange={(id) => { setAgentProfileId(id); localStorage.setItem('synthesize.agentProfileId.v1', id); }} />
@@ -554,6 +626,18 @@ export function App() {
           <ProblemsPanel repo={repo} content={content} />
         </section>
         <aside className="rightbar">
+          <MissionControlPanel
+            runtimeSettings={runtimeSettings}
+            endpointClass={endpointClass}
+            agentProfileId={agentProfileId}
+            patches={patchOperations}
+            validationByProposal={validationByProposal}
+            applyByProposal={applyByProposal}
+            rollbackByProposal={rollbackByProposal}
+            proposalSourceByProposal={proposalSourceByProposal}
+            events={events}
+            auditEvents={auditEvents}
+          />
           <ChatPanel
             repo={repo}
             currentContent={content}
@@ -561,7 +645,7 @@ export function App() {
             isDirty={isDirty}
             runtimeSettings={runtimeSettings}
             agentProfileId={agentProfileId}
-            onContextBuilt={(bundle) => { setLastContextBundle(bundle); addEvent('context.bundle_created', `${bundle.context_bundle_id} · ${bundle.char_estimate} chars · ${bundle.endpoint_classification}`, 'ok'); }}
+            onContextBuilt={(bundle) => { setLastContextBundle(bundle); addEvent('context.bundle_created', `${bundle.context_bundle_id} · ${bundle.compiled_input_tokens} ${bundle.token_count_kind} tokens · ${bundle.endpoint_classification}`, 'ok'); }}
             onModelCall={() => { setRuntimeRequestAttempts((prev) => prev + 1); }}
             onParseFailed={(parseError, raw) => { addEvent('operation.parse_failed', parseError, 'error'); void recordSessionEvent('operation.parse_failed', { error: parseError, raw_chars: raw.length }); }}
             onOperations={(ops, source) => {
@@ -600,19 +684,20 @@ export function App() {
             onRollback={rollbackPatch}
           />
           <SessionLog events={auditEvents} onRefresh={() => refreshAudit()} onClearLocalData={clearLocalSessionData} />
+          <SkillAgentPanel sessionId={SESSION_ID} repoRoot={repo?.repoRoot ?? null} />
         </aside>
-      </main>
+      </main> : <StudioWorkspace mode={productMode} repo={repo} sessionId={SESSION_ID} />}
       <CommandPalette open={showCommandPalette} commands={paletteCommands} onClose={() => setShowCommandPalette(false)} />
       <QuickOpen open={showQuickOpen} repo={repo} onOpenFile={openFile} onClose={() => setShowQuickOpen(false)} />
       <SettingsPanel open={showSettings} settings={editorSettings} onChange={setEditorSettings} onClose={() => setShowSettings(false)} />
       <footer className="footer">
-        <span>Mode: Local-first workbench</span>
-        <span>Runtime: {runtimeSettings.provider === 'fake' ? 'Fake Runtime' : runtimeSettings.provider === 'managed-llamacpp' ? 'Managed llama.cpp' : 'Local Model Server'}</span>
+        <span>Mode: {productMode === 'assist' ? 'Assist · direct governed workbench' : productMode === 'studio' ? 'Studio · outcome-governed roles' : 'Dream · mandate-bound bounded cycles'}</span>
+        <span>Runtime: {runtimeSettings.provider === 'fake' ? 'Fake Runtime' : runtimeSettings.provider === 'managed-llamacpp' ? 'Managed llama.cpp' : runtimeSettings.provider === 'cloud-openai' ? 'OpenAI Cloud' : runtimeSettings.provider === 'cloud-anthropic' ? 'Anthropic Cloud' : 'Local Model Server'}</span>
         <span>Endpoint: {runtimeSettings.provider === 'fake' ? 'in-memory' : endpointClass}{runtimeSettings.provider !== 'fake' && endpointClass !== 'local' ? ' · non-local warning' : ''}</span>
         <span>Runtime request attempts this session: {runtimeRequestAttempts} · prompts derived from persisted context bundles</span>
         <span>Code execution: governed personal terminal + detected tasks</span>
         <span>Repo boundary: enforced for read/validate/approve/apply/rollback</span>
-        <span>Patch approval/rollback: backend-owned · Apply: checkpointed transaction-shaped · Task execution: approved/audited/timeout-bounded · Lock: in-process · Network sandbox: not OS-enforced</span>
+        <span>Patch approval/rollback: backend-owned · Apply: checkpointed · Task execution: approved/audited · Network sandbox: not OS-enforced</span>
       </footer>
     </div>
   );

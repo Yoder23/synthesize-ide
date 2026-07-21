@@ -1,6 +1,193 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "models": [
+    {
+      "registryId": "qwen3-coder-0.6b-instruct-q4-k-m",
+      "name": "Qwen3 Coder 0.6B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 32768,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 4,
+      "recommendedVramGb": 0,
+      "skillTier": "fast",
+      "download": {
+        "status": "script-supported",
+        "source": "https://huggingface.co/Qwen/Qwen3-Coder-0.6B-Instruct-GGUF",
+        "file": "qwen3-coder-0.6b-instruct-q4_k_m.gguf",
+        "bootstrap": "scripts/bootstrap-qwen3.ps1 -Model coder-0.6b"
+      },
+      "notes": "Qwen3 fast skill agent: rapid low-lift tasks (doc lookups, simple edits, context summaries)."
+    },
+    {
+      "registryId": "qwen3-coder-1.7b-instruct-q4-k-m",
+      "name": "Qwen3 Coder 1.7B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 32768,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 6,
+      "recommendedVramGb": 0,
+      "skillTier": "balanced",
+      "download": {
+        "status": "script-supported",
+        "source": "https://huggingface.co/Qwen/Qwen3-Coder-1.7B-Instruct-GGUF",
+        "file": "qwen3-coder-1.7b-instruct-q4_k_m.gguf",
+        "bootstrap": "scripts/bootstrap-qwen3.ps1 -Model coder-1.7b"
+      },
+      "notes": "Qwen3 default skill agent: code writing, test generation, debugging assistance."
+    },
+    {
+      "registryId": "qwen3-coder-8b-instruct-q4-k-m",
+      "name": "Qwen3 Coder 8B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 65536,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 14,
+      "recommendedVramGb": 8,
+      "skillTier": "powerful",
+      "download": {
+        "status": "script-supported",
+        "source": "https://huggingface.co/Qwen/Qwen3-Coder-8B-Instruct-GGUF",
+        "file": "qwen3-coder-8b-instruct-q4_k_m.gguf",
+        "bootstrap": "scripts/bootstrap-qwen3.ps1 -Model coder-8b"
+      },
+      "notes": "Qwen3 powerful local agent: complex refactors, architecture planning, multi-file patches."
+    },
+    {
+      "registryId": "qwen3-coder-14b-instruct-q4-k-m",
+      "name": "Qwen3 Coder 14B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 65536,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 22,
+      "recommendedVramGb": 16,
+      "skillTier": "powerful",
+      "download": {
+        "status": "user-supplied-url-required",
+        "reason": "Verify model URL and checksum before enabling one-click download. Use bootstrap-qwen3.ps1 with explicit URL."
+      },
+      "notes": "Qwen3 maximum local model: use for critical planning and review passes when GPU memory allows."
+    },
+    {
+      "registryId": "qwen3-coder-32b-instruct-q4-k-m",
+      "name": "Qwen3 Coder 32B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 131072,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 48,
+      "recommendedVramGb": 24,
+      "skillTier": "frontier-local",
+      "download": {
+        "status": "user-supplied-url-required",
+        "reason": "Very large model; verify hardware capacity and URL before download."
+      },
+      "notes": "Qwen3 frontier-local: near-cloud-quality coding on high-end workstation GPUs."
+    },
+    {
+      "registryId": "cloud-openai-gpt-4o",
+      "name": "GPT-4o (OpenAI Cloud)",
+      "runtime": "cloud-openai",
+      "format": "remote-compatible",
+      "family": "gpt",
+      "contextWindow": 128000,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "proprietary",
+      "recommendedRamGb": 0,
+      "recommendedVramGb": 0,
+      "skillTier": "cloud-heavy",
+      "download": {
+        "status": "api-key-required",
+        "reason": "Set OPENAI_API_KEY environment variable or configure via Settings panel."
+      },
+      "notes": "Cloud heavy-lift: reserved for complex architecture, large codebase analysis, and critical reviews."
+    },
+    {
+      "registryId": "cloud-openai-o3",
+      "name": "o3 (OpenAI Cloud)",
+      "runtime": "cloud-openai",
+      "format": "remote-compatible",
+      "family": "gpt",
+      "contextWindow": 200000,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "proprietary",
+      "recommendedRamGb": 0,
+      "recommendedVramGb": 0,
+      "skillTier": "cloud-reasoning",
+      "download": {
+        "status": "api-key-required",
+        "reason": "Set OPENAI_API_KEY environment variable or configure via Settings panel."
+      },
+      "notes": "Cloud reasoning: use for hard algorithmic problems, security review, and correctness proofs."
+    },
+    {
+      "registryId": "cloud-anthropic-claude-sonnet",
+      "name": "Claude Sonnet (Anthropic Cloud)",
+      "runtime": "cloud-anthropic",
+      "format": "remote-compatible",
+      "family": "claude",
+      "contextWindow": 200000,
+      "supportsJsonMode": true,
+      "supportsToolCalling": true,
+      "supportsEmbeddings": false,
+      "license": "proprietary",
+      "recommendedRamGb": 0,
+      "recommendedVramGb": 0,
+      "skillTier": "cloud-heavy",
+      "download": {
+        "status": "api-key-required",
+        "reason": "Set ANTHROPIC_API_KEY environment variable or configure via Settings panel."
+      },
+      "notes": "Cloud heavy-lift: excellent for large context code understanding and nuanced review."
+    },
+    {
+      "registryId": "qwen2.5-coder-0.5b-instruct-q4-k-m",
+      "name": "Qwen2.5 Coder 0.5B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 32768,
+      "supportsJsonMode": true,
+      "supportsToolCalling": false,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 4,
+      "recommendedVramGb": 0,
+      "download": {
+        "status": "script-supported",
+        "source": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+        "file": "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+        "bootstrap": "scripts/bootstrap-local-model.ps1 -Model smoke"
+      },
+      "notes": "Fast smoke-test model for proving the managed local-model path without Ollama."
+    },
     {
       "registryId": "qwen2.5-coder-7b-instruct-q4-k-m",
       "name": "Qwen2.5 Coder 7B Instruct Q4_K_M",
@@ -15,10 +202,31 @@
       "recommendedRamGb": 12,
       "recommendedVramGb": 8,
       "download": {
-        "status": "user-supplied-url-required",
-        "reason": "v4 has registration scaffolding. v5/v6 should add checksum-verified downloader after model URL and license selection."
+        "status": "planned-script-supported",
+        "reason": "Use the 0.5B or 1.5B bootstrap lane for smoke testing first; add larger downloads only after hardware sizing."
       },
       "notes": "Recommended first real local coding model lane for laptops."
+    },
+    {
+      "registryId": "qwen2.5-coder-1.5b-instruct-q4-k-m",
+      "name": "Qwen2.5 Coder 1.5B Instruct Q4_K_M",
+      "runtime": "llamacpp",
+      "format": "gguf",
+      "family": "qwen",
+      "contextWindow": 32768,
+      "supportsJsonMode": true,
+      "supportsToolCalling": false,
+      "supportsEmbeddings": false,
+      "license": "apache-2.0",
+      "recommendedRamGb": 6,
+      "recommendedVramGb": 0,
+      "download": {
+        "status": "script-supported",
+        "source": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+        "file": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "bootstrap": "scripts/bootstrap-local-model.ps1 -Model coder-1.5b"
+      },
+      "notes": "Practical CPU/GPU-light local coding model lane for real Synthesize/MoA smoke tests."
     },
     {
       "registryId": "qwen2.5-coder-14b-instruct-q4-k-m",

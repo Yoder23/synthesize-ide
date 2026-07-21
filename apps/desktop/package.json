@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
-    "test": "tsc --noEmit"
+    "test": "tsc --noEmit && node --test src/features/studio/*.test.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -20,7 +20,8 @@
     "zod": "^3.24.1",
     "@synthesize/shared-types": "workspace:*",
     "@synthesize/agent-harness": "workspace:*",
-    "@synthesize/runtime-adapters": "workspace:*"
+    "@synthesize/runtime-adapters": "workspace:*",
+    "@synthesize/skill-registry": "workspace:*"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

@@ -84,7 +84,7 @@ V11 adds local model runtime options:
 
 - Fake runtime.
 - Local model server using OpenAI-compatible local HTTP protocol.
-- Managed llama.cpp using a user-supplied binary and GGUF model path.
+- Managed llama.cpp using a local binary and GGUF model path, including paths created by the no-Ollama bootstrap script.
 
 The phrase OpenAI-compatible refers only to the local HTTP protocol shape. Synthesize does not require OpenAI cloud credentials.
 
@@ -96,3 +96,23 @@ Runtime risks:
 - Model output is still untrusted and may only propose typed operations.
 
 Patch lifecycle authority remains backend-owned.
+
+## Outcome-Governed Studio update
+
+Additional assets are frozen product intent, business context, standing mandates, role/context provenance, requirement evidence, ADRs, worktree identity, Pulse history, and proof reports.
+
+Additional threats and controls:
+
+- **Role impersonation or confused deputy:** the backend derives role permissions from the prepared run and validates artifact type, task, active spec, initiative, and exact context-bundle bindings. A client-provided label is not authority.
+- **Stale or replayed output:** immutable spec versions and unique operation IDs reject stale bindings and operation replays. Canonical operation hashes appear in proof reports.
+- **Cross-role prompt injection:** repository and prior-agent text are treated as context records, not policy. Role prompts declare invariants and prohibit private chain-of-thought disclosure. Communication uses validated artifacts, beliefs, and questions.
+- **Unbounded autonomy:** mandates bind repository/mode/path and enforce candidate, prototype, iteration, file, and elapsed-time budgets. Only a local human can raise Dream autonomy. Budget exhaustion blocks work.
+- **Active-branch or worktree escape:** creation requires a clean current base and a derived safe sibling path. Repository identity and one-worktree-per-initiative are checked. Cleanup needs the exact identity token and a clean candidate. Git worktrees are isolation, not sandboxing.
+- **Executable prototype payload:** UX output is a deny-by-default declarative tree with allowlisted primitives and local scalar state. Both backend and frontend reject script, HTML, imports, network, commands, filesystem access, unknown nodes, and unsafe references.
+- **False verification:** requirement state cannot become verified until every declared evidence type has a passing record. Builder output is not verification authority; Reviewer routing cannot erase evidence history.
+- **Pulse poisoning or overreach:** symbolic findings cite events and factors. Experimental liquid results are calibrated shadow data, cannot route interventions, and never establish truth. Lifecycle changes remain backend/human operations.
+- **Sensitive-context export:** exact role bundles remain local and are excluded from proof export by default. Encryption at rest and OS-level network egress control are still not claimed.
+- **Context overflow or silent truncation:** runtime/model capabilities are persisted with provenance; the backend compiles fresh role capsules and enforces input + output + margin before inference. Mandatory P0/P1 material is never silently dropped; overflow blocks and requests task partitioning.
+- **Context scope escape or leakage:** typed selectors pass role policy and RepoGuard, cross-role summaries are isolated, restricted business records are redacted before summary generation, repository reads are byte-bounded, and progressive disclosure is capped per run.
+- **Stale or tampered capsule:** active spec, full approved-ADR set, runtime capability, task/initiative binding, budget equation, exact messages, and SHA-256 are revalidated before inference and before accepting output.
+- **Database tampering/interruption:** numbered migrations are transactional and idempotent; state is durable across restart. Local users with filesystem access can still alter SQLite, so audit integrity is not claimed against a hostile machine owner.
